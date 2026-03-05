@@ -1,0 +1,170 @@
+/* ========== FIGHTER BASE STYLES ========== */
+.fighter { position:relative; width:80px; height:180px; transform-origin:bottom center; transform:scale(0.8); filter:drop-shadow(0 10px 20px rgba(0,0,0,0.4)); }
+.fighter.facing-left { transform:scale(0.8) scaleX(-1); }
+.piece { position:absolute; transition:all 0.15s cubic-bezier(.34,1.56,.64,1); }
+.neck { width:14px; height:10px; top:36px; left:33px; }
+.torso { width:42px; height:52px; top:46px; left:19px; border-radius:5px 5px 3px 3px; border-bottom:none; overflow:hidden; }
+.hips { width:46px; height:20px; top:98px; left:17px; border-radius:3px; }
+.arm-front,.arm-back { width:15px; height:46px; border-radius:7px; transform-origin:top center; top:50px; }
+.arm-front { left:14px; z-index:11; }
+.arm-back { left:51px; z-index:1; }
+.glove { position:absolute; width:22px; height:20px; border-radius:7px 7px 5px 5px; bottom:-13px; left:-4px; }
+.leg-front,.leg-back { width:17px; height:54px; border-radius:3px; top:118px; transform-origin:top center; }
+.leg-front { left:21px; z-index:5; }
+.leg-back { left:42px; z-index:4; }
+.shoe { position:absolute; width:25px; height:12px; bottom:-5px; left:-4px; border-radius:5px 6px 4px 4px; }
+
+/* ========== PLAYER 1 — Red Boxer ========== */
+.fighter.player1 .head { width:34px; height:36px; background:linear-gradient(160deg,#fddbb4,#f0b880); top:0; left:23px; border-radius:10px 10px 8px 8px; z-index:10; box-shadow:inset -3px -3px 6px rgba(0,0,0,.12),0 3px 10px rgba(0,0,0,.3); }
+.fighter.player1 .hair { position:absolute; width:36px; height:15px; background:linear-gradient(180deg,#241408,#3d2210); top:-4px; left:-1px; border-radius:10px 10px 0 0; }
+.fighter.player1 .eye { position:absolute; width:8px; height:8px; background:#fff; border-radius:50%; top:16px; left:6px; box-shadow:inset 0 0 0 2.5px #1a1a1a; }
+.fighter.player1 .eye::after { content:''; position:absolute; width:3px; height:3px; background:#111; border-radius:50%; top:2px; left:2px; }
+.fighter.player1 .ear { position:absolute; width:8px; height:12px; background:linear-gradient(180deg,#fddbb4,#e8a870); border-radius:50%; top:13px; left:-5px; z-index:-1; }
+.fighter.player1 .headband { position:absolute; width:36px; height:7px; background:linear-gradient(90deg,#c0304e,#e94560,#ff7088,#e94560,#c0304e); top:10px; left:-1px; border-radius:2px; }
+.fighter.player1 .mouthguard { position:absolute; width:18px; height:6px; background:linear-gradient(180deg,#e94560,#b02040); bottom:5px; left:8px; border-radius:3px; }
+.fighter.player1 .neck { background:linear-gradient(180deg,#f0b880,#e0a060); }
+.fighter.player1 .torso { background:linear-gradient(160deg,#20244a,#141830); border:2px solid #e94560; }
+.fighter.player1 .torso::before { content:''; position:absolute; width:16px; height:12px; background:linear-gradient(180deg,#f0b880,#e0a060); top:0; left:13px; border-radius:0 0 6px 6px; }
+.fighter.player1 .hips { background:linear-gradient(180deg,#e94560,#b02040); }
+.fighter.player1 .arm-front { background:linear-gradient(180deg,#fddbb4,#e8a870); }
+.fighter.player1 .arm-back { background:linear-gradient(180deg,#e8c09a,#d49060); }
+.fighter.player1 .glove { background:linear-gradient(150deg,#ff7088,#e94560 45%,#b02040); }
+.fighter.player1 .leg-front { background:linear-gradient(180deg,#2050a0,#163a70); }
+.fighter.player1 .leg-back { background:linear-gradient(180deg,#163a70,#0e2a50); }
+.fighter.player1 .shoe { background:linear-gradient(160deg,#222,#111); box-shadow:0 4px 8px rgba(0,0,0,.5); }
+.fighter.player1 .shoe::before { content:''; position:absolute; width:100%; height:3px; background:linear-gradient(90deg,#c0304e,#e94560,#c0304e); bottom:0; left:0; border-radius:0 0 4px 4px; }
+
+/* ========== PLAYER 2 — Pink Boxer ========== */
+.fighter.player2 .head { width:34px; height:36px; background:linear-gradient(160deg,#fddbb4,#f0b880); top:0; left:23px; border-radius:10px 10px 8px 8px; z-index:10; box-shadow:inset -3px -3px 6px rgba(0,0,0,.12),0 3px 10px rgba(0,0,0,.3); }
+.fighter.player2 .hair { position:absolute; width:52px; height:38px; background:linear-gradient(180deg,#ff69b4,#ff1493 50%,#c71585); top:-20px; left:-9px; border-radius:50% 50% 20% 20%/60% 60% 20% 20%; box-shadow:-6px 4px 0 2px #ff69b4,6px 4px 0 2px #ff1493,0 -6px 0 3px #ff85c8,-10px -2px 0 0 #ff9ed5,10px -2px 0 0 #e0107a; z-index:11; }
+.fighter.player2 .hair::before { content:''; position:absolute; width:18px; height:28px; background:linear-gradient(180deg,#ff85c8,#ff1493); border-radius:50%; top:4px; left:-12px; }
+.fighter.player2 .hair::after { content:''; position:absolute; width:18px; height:28px; background:linear-gradient(180deg,#ff85c8,#e0107a); border-radius:50%; top:4px; right:-12px; }
+.fighter.player2 .eye { position:absolute; width:8px; height:8px; background:#fff; border-radius:50%; top:16px; left:6px; box-shadow:inset 0 0 0 2.5px #1a1a1a; }
+.fighter.player2 .eye::after { content:''; position:absolute; width:3px; height:3px; background:#111; border-radius:50%; top:2px; left:2px; }
+.fighter.player2 .ear { position:absolute; width:8px; height:12px; background:linear-gradient(180deg,#fddbb4,#e8a870); border-radius:50%; top:13px; left:-5px; z-index:-1; }
+.fighter.player2 .headband { position:absolute; width:36px; height:7px; background:linear-gradient(90deg,#ff1493,#ff69b4,#ffb6d9,#ff69b4,#ff1493); top:10px; left:-1px; border-radius:2px; }
+.fighter.player2 .mouthguard { position:absolute; width:18px; height:6px; background:linear-gradient(180deg,#ff69b4,#c71585); bottom:5px; left:8px; border-radius:3px; }
+.fighter.player2 .neck { background:linear-gradient(180deg,#f0b880,#e0a060); }
+.fighter.player2 .torso { background:linear-gradient(160deg,#ff1493,#c71585); border:2px solid #ffb6d9; }
+.fighter.player2 .torso::before { content:''; position:absolute; width:16px; height:12px; background:linear-gradient(180deg,#f0b880,#e0a060); top:0; left:13px; border-radius:0 0 6px 6px; }
+.fighter.player2 .hips { background:linear-gradient(180deg,#ff69b4,#ff1493); }
+.fighter.player2 .arm-front { background:linear-gradient(180deg,#fddbb4,#e8a870); }
+.fighter.player2 .arm-back { background:linear-gradient(180deg,#e8c09a,#d49060); }
+.fighter.player2 .glove { background:linear-gradient(150deg,#ffb6d9,#ff69b4 45%,#ff1493); box-shadow:0 4px 10px rgba(255,105,180,.6); }
+.fighter.player2 .leg-front { background:linear-gradient(180deg,#fddbb4,#e8a870); }
+.fighter.player2 .leg-back { background:linear-gradient(180deg,#e8c09a,#d49060); }
+.fighter.player2 .shoe { background:linear-gradient(160deg,#fff,#f0e0f0); box-shadow:0 4px 8px rgba(0,0,0,.4); }
+.fighter.player2 .shoe::before { content:''; position:absolute; width:100%; height:3px; background:linear-gradient(90deg,#ff1493,#ff69b4,#ff1493); bottom:0; left:0; border-radius:0 0 4px 4px; }
+
+/* ========== PLAYER 3 — Demon ========== */
+.fighter.player3 .head { width:34px; height:36px; background:linear-gradient(160deg,#2a1a3e,#1a0a2a); top:0; left:23px; border-radius:10px 10px 8px 8px; z-index:10; box-shadow:inset -3px -3px 6px rgba(0,0,0,.4),0 3px 10px rgba(0,0,0,.6),0 0 8px rgba(120,0,255,.3); }
+.fighter.player3 .hair { position:absolute; width:36px; height:10px; background:transparent; top:-22px; left:-1px; z-index:15; }
+.fighter.player3 .hair::before { content:''; position:absolute; width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:28px solid #4a0080; top:0; left:2px; filter:drop-shadow(-2px -4px 6px rgba(160,32,240,.7)); transform:rotate(-12deg); }
+.fighter.player3 .hair::after { content:''; position:absolute; width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:28px solid #4a0080; top:0; right:2px; filter:drop-shadow(2px -4px 6px rgba(160,32,240,.7)); transform:rotate(12deg); }
+.fighter.player3 .eye { position:absolute; width:10px; height:7px; background:#ff0040; border-radius:50%; top:15px; left:5px; box-shadow:0 0 6px #ff0040,0 0 12px rgba(255,0,64,.8); }
+.fighter.player3 .eye::after { content:''; position:absolute; width:4px; height:4px; background:#200010; border-radius:50%; top:1px; left:3px; }
+.fighter.player3 .ear { position:absolute; width:8px; height:14px; top:10px; left:-5px; z-index:-1; clip-path:polygon(0% 100%,50% 0%,100% 100%); background:#3a0060; }
+.fighter.player3 .headband { position:absolute; width:36px; height:7px; background:linear-gradient(90deg,#1a0030,#4a0080,#6600cc,#4a0080,#1a0030); top:10px; left:-1px; border-radius:2px; box-shadow:0 0 6px rgba(100,0,200,.8); }
+.fighter.player3 .mouthguard { position:absolute; width:18px; height:6px; background:linear-gradient(180deg,#3a0060,#1a0030); bottom:5px; left:8px; border-radius:3px; box-shadow:0 0 4px rgba(100,0,200,.6); }
+.fighter.player3 .neck { background:linear-gradient(180deg,#2a1a3e,#1a0a2a); }
+.fighter.player3 .torso { background:linear-gradient(160deg,#0d0030,#06001a); border:2px solid #5500aa; box-shadow:0 0 10px rgba(80,0,180,.3); }
+.fighter.player3 .torso::before { content:''; position:absolute; width:16px; height:12px; background:linear-gradient(180deg,#2a1a3e,#1a0a2a); top:0; left:13px; border-radius:0 0 6px 6px; }
+.fighter.player3 .torso::after { content:''; position:absolute; width:3px; height:28px; background:linear-gradient(180deg,rgba(120,0,255,.9),rgba(60,0,180,.2)); top:14px; left:18px; border-radius:2px; box-shadow:0 0 6px rgba(120,0,255,.8); }
+.fighter.player3 .hips { background:linear-gradient(180deg,#1a0040,#0a0020); border:1px solid #3a0070; box-shadow:0 0 8px rgba(80,0,180,.3); }
+.fighter.player3 .arm-front { background:linear-gradient(180deg,#2a1a3e,#1a0a28); box-shadow:0 0 6px rgba(80,0,180,.2); }
+.fighter.player3 .arm-back { background:linear-gradient(180deg,#200d30,#120820); }
+.fighter.player3 .glove { background:linear-gradient(150deg,#5500aa,#3a0080 45%,#1a0040); box-shadow:0 4px 12px rgba(80,0,180,.7),0 0 10px rgba(120,0,255,.4); }
+.fighter.player3 .leg-front { background:linear-gradient(180deg,#2a1a3e,#1a0a28); }
+.fighter.player3 .leg-back { background:linear-gradient(180deg,#200d30,#120820); }
+.fighter.player3 .shoe { background:linear-gradient(160deg,#0d0020,#060010); box-shadow:0 4px 10px rgba(0,0,0,.8),0 0 8px rgba(80,0,180,.3); }
+.fighter.player3 .shoe::before { content:''; position:absolute; width:100%; height:3px; background:linear-gradient(90deg,#3a0080,#7700cc,#3a0080); bottom:0; left:0; border-radius:0 0 4px 4px; box-shadow:0 0 6px rgba(120,0,255,.8); }
+
+/* ========== PLAYER 4 — Vampire ========== */
+.fighter.player4 { height:190px; }
+.fighter.player4 .head { width:32px; height:32px; background:linear-gradient(160deg,#e8d8c0,#d4c0a0); top:2px; left:24px; border-radius:4px; z-index:10; box-shadow:inset -2px -2px 4px rgba(0,0,0,.2),0 0 0 2px #111,0 3px 12px rgba(0,0,0,.5); }
+.fighter.player4 .hair { position:absolute; width:50px; height:90px; background:linear-gradient(180deg,#f0f0f0,#d8d8d8 40%,#b0b0b0 80%,#888); top:-14px; left:-9px; border-radius:22px 22px 12px 14px; z-index:9; box-shadow:3px 4px 10px rgba(0,0,0,.5),0 0 0 2px #111; }
+.fighter.player4 .hair::before { content:''; position:absolute; width:6px; height:70px; background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,0)); top:8px; left:10px; border-radius:4px; }
+.fighter.player4 .hair::after { content:''; position:absolute; width:18px; height:60px; background:linear-gradient(160deg,rgba(255,255,255,.4),rgba(150,150,150,.1)); top:14px; right:2px; border-radius:8px; }
+.fighter.player4 .mask { position:absolute; width:30px; height:14px; background:linear-gradient(180deg,rgba(20,10,10,.85),rgba(40,10,10,.6)); top:0; left:1px; border-radius:3px 3px 0 0; z-index:11; }
+.fighter.player4 .mask::before { content:''; position:absolute; width:100%; height:2px; background:rgba(180,30,30,.8); bottom:0; left:0; }
+.fighter.player4 .peek-eye { position:absolute; width:12px; height:8px; background:radial-gradient(ellipse at center,#fff,#ffcccc 40%,#ff2222); border-radius:50%; top:20px; left:0; z-index:12; box-shadow:0 0 6px 2px rgba(255,50,50,.9),0 0 14px 4px rgba(200,20,20,.7),0 0 28px 8px rgba(180,0,0,.4); animation:eyeGlow 2.8s ease-in-out infinite; }
+.fighter.player4 .peek-eye::after { content:''; position:absolute; width:4px; height:4px; background:#2a0000; border-radius:50%; top:2px; left:4px; }
+@keyframes eyeGlow { 0%,100%{box-shadow:0 0 6px 2px rgba(255,50,50,.9),0 0 14px 4px rgba(200,20,20,.7),0 0 28px 8px rgba(180,0,0,.4)} 50%{box-shadow:0 0 10px 4px rgba(255,80,80,1),0 0 22px 8px rgba(220,30,30,.9),0 0 40px 14px rgba(200,0,0,.6)} }
+.fighter.player4 .eye { display:none; }
+.fighter.player4 .ear { position:absolute; width:7px; height:10px; background:linear-gradient(180deg,#e8d8c0,#d4c0a0); border-radius:50%; top:10px; left:-4px; z-index:-1; box-shadow:0 0 0 1px #333; }
+.fighter.player4 .headband { display:none; }
+.fighter.player4 .mouthguard { display:none; }
+.fighter.player4 .neck { background:linear-gradient(180deg,#d4c0a0,#c0aa88); box-shadow:0 0 0 1px #222; top:34px; left:34px; width:12px; }
+.fighter.player4 .torso { background:linear-gradient(160deg,#1a1a22,#0e0e16); border:2px solid #2a2a38; top:44px; }
+.fighter.player4 .torso::before { content:''; position:absolute; width:42px; height:8px; background:linear-gradient(90deg,#8a0a0a,#cc1111,#8a0a0a); top:0; left:-2px; }
+.fighter.player4 .torso::after { content:''; position:absolute; width:2px; height:35px; background:linear-gradient(180deg,rgba(180,30,30,.5),rgba(180,30,30,.05)); top:8px; left:18px; border-radius:2px; }
+.fighter.player4 .hips { background:linear-gradient(180deg,#cc1111,#8a0808); top:96px; height:16px; box-shadow:0 0 0 1px #3a0808; }
+.fighter.player4 .hips::after { content:''; position:absolute; width:10px; height:10px; background:linear-gradient(135deg,#ffd700,#cc9900); border-radius:2px; top:3px; left:18px; box-shadow:0 0 4px rgba(220,170,0,.5); }
+.fighter.player4 .arm-front { background:linear-gradient(180deg,#1a1a22,#111118); border:1px solid #2a2a38; width:14px; height:44px; }
+.fighter.player4 .arm-back { background:linear-gradient(180deg,#141418,#0c0c12); border:1px solid #222; width:14px; height:44px; left:52px; }
+.fighter.player4 .glove { background:linear-gradient(150deg,#cc2222,#991111 45%,#660808); box-shadow:0 4px 14px rgba(180,20,20,.7),0 0 0 1px #3a0808; }
+.fighter.player4 .leg-front { background:linear-gradient(180deg,#1a1a22,#0e0e18); border:1px solid #2a2a38; top:112px; height:58px; }
+.fighter.player4 .leg-front::before { content:''; position:absolute; width:2px; height:100%; background:linear-gradient(180deg,#cc1111,#440000); right:3px; top:0; }
+.fighter.player4 .leg-back { background:linear-gradient(180deg,#141418,#0c0c14); border:1px solid #1e1e28; top:112px; height:58px; }
+.fighter.player4 .leg-back::before { content:''; position:absolute; width:2px; height:100%; background:linear-gradient(180deg,#cc1111,#440000); right:3px; top:0; }
+.fighter.player4 .shoe { background:linear-gradient(160deg,#1a1a22,#111118); box-shadow:0 4px 8px rgba(0,0,0,.6),0 0 0 1px #2a2a3a; width:26px; left:-5px; bottom:-4px; }
+.fighter.player4 .shoe::before { content:''; position:absolute; width:100%; height:3px; background:linear-gradient(90deg,#8a0808,#cc1111,#8a0808); bottom:0; left:0; border-radius:0 0 4px 4px; }
+
+/* Hide p4-only elements for other players */
+.fighter.player1 .mask,.fighter.player1 .peek-eye,
+.fighter.player2 .mask,.fighter.player2 .peek-eye,
+.fighter.player3 .mask,.fighter.player3 .peek-eye { display:none; }
+
+/* ========== ANIMATIONS ========== */
+.fighter.idle { animation:breathe 2.4s ease-in-out infinite; }
+@keyframes breathe { 0%,100%{transform:scale(0.8) translateY(0)} 50%{transform:scale(0.8) translateY(-4px)} }
+.fighter.facing-left.idle { animation:breatheFlip 2.4s ease-in-out infinite; }
+@keyframes breatheFlip { 0%,100%{transform:scale(0.8) scaleX(-1) translateY(0)} 50%{transform:scale(0.8) scaleX(-1) translateY(-4px)} }
+
+.fighter.boxing .arm-front { animation:punch-front 0.4s ease-in-out; }
+@keyframes punch-front { 0%{transform:rotate(-10deg)} 40%{transform:rotate(-95deg)} 100%{transform:rotate(-10deg)} }
+
+.fighter.kicking .leg-front { animation:kick-front 0.5s ease-in-out; }
+@keyframes kick-front { 0%{transform:rotate(0)} 40%{transform:rotate(-100deg) translateX(8px)} 100%{transform:rotate(0)} }
+
+.fighter.defend .arm-front { transform:rotate(-50deg); }
+.fighter.defend .arm-back { transform:rotate(50deg); }
+
+.fighter.duck { transform:scale(0.8) scaleY(0.7) translateY(50px); }
+.fighter.facing-left.duck { transform:scale(0.8) scaleX(-1) scaleY(0.7) translateY(50px); }
+
+.fighter.hit { animation:hitShake 0.3s ease-out; filter:brightness(2) drop-shadow(0 0 20px #fff); }
+@keyframes hitShake { 0%,100%{transform:scale(0.8) translateX(0)} 25%{transform:scale(0.8) translateX(-10px)} 75%{transform:scale(0.8) translateX(10px)} }
+.fighter.facing-left.hit { animation:hitShakeFlip 0.3s ease-out; }
+@keyframes hitShakeFlip { 0%,100%{transform:scale(0.8) scaleX(-1) translateX(0)} 25%{transform:scale(0.8) scaleX(-1) translateX(-10px)} 75%{transform:scale(0.8) scaleX(-1) translateX(10px)} }
+
+.fighter.victory { animation:victoryBounce 0.6s ease infinite alternate !important; }
+.fighter.victory .arm-front { transform:rotate(-160deg); }
+.fighter.victory .arm-back { transform:rotate(160deg); }
+@keyframes victoryBounce { from{transform:scale(0.8) translateY(0)} to{transform:scale(0.8) translateY(-15px)} }
+.fighter.facing-left.victory { animation:victoryBounceFlip 0.6s ease infinite alternate !important; }
+@keyframes victoryBounceFlip { from{transform:scale(0.8) scaleX(-1) translateY(0)} to{transform:scale(0.8) scaleX(-1) translateY(-15px)} }
+
+.fighter.defeated { animation:fallDown 0.5s ease-out forwards !important; transform-origin:bottom center; }
+@keyframes fallDown { 0%{transform:scale(0.8) rotate(0)} 100%{transform:scale(0.8) rotate(90deg) translateY(40px)} }
+.fighter.facing-left.defeated { animation:fallDownFlip 0.5s ease-out forwards !important; transform-origin:bottom center; }
+@keyframes fallDownFlip { 0%{transform:scale(0.8) scaleX(-1) rotate(0)} 100%{transform:scale(0.8) scaleX(-1) rotate(-90deg) translateY(40px)} }
+
+/* Move forward/backward animations */
+.fighter.move-forward { animation:moveForward 0.4s ease-out; }
+@keyframes moveForward { 0%{transform:scale(0.8)} 50%{transform:scale(0.8) translateX(15px)} 100%{transform:scale(0.8)} }
+.fighter.facing-left.move-forward { animation:moveForwardFlip 0.4s ease-out; }
+@keyframes moveForwardFlip { 0%{transform:scale(0.8) scaleX(-1)} 50%{transform:scale(0.8) scaleX(-1) translateX(-15px)} 100%{transform:scale(0.8) scaleX(-1)} }
+
+.fighter.move-backward { animation:moveBackward 0.4s ease-out; }
+@keyframes moveBackward { 0%{transform:scale(0.8)} 50%{transform:scale(0.8) translateX(-15px)} 100%{transform:scale(0.8)} }
+.fighter.facing-left.move-backward { animation:moveBackwardFlip 0.4s ease-out; }
+@keyframes moveBackwardFlip { 0%{transform:scale(0.8) scaleX(-1)} 50%{transform:scale(0.8) scaleX(-1) translateX(15px)} 100%{transform:scale(0.8) scaleX(-1)} }
+
+/* Hit effect burst */
+.hit-effect { position:absolute; width:80px; height:80px; background:radial-gradient(circle,#fff,#ff0 30%,transparent 70%); border-radius:50%; z-index:20; animation:hitBurst 0.3s ease-out forwards; pointer-events:none; }
+@keyframes hitBurst { 0%{transform:scale(0);opacity:1} 100%{transform:scale(2);opacity:0} }
+
+/* Sparkles */
+.sparkle { position:absolute; pointer-events:none; animation:sparkleFly var(--dur,1.4s) ease-out forwards; z-index:99; font-size:20px; }
+@keyframes sparkleFly { 0%{opacity:1;transform:translate(0,0) scale(1) rotate(0)} 60%{opacity:1} 100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(0.3) rotate(var(--rot))} }

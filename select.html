@@ -293,18 +293,27 @@
     <script>
         const { useState, useEffect, useRef, useCallback } = React;
 
+        // Model names for each fighter
+        const MODEL_NAMES = { 1: 'Gemini 2.5 Flash', 2: 'Gemini 2.5 Pro', 3: 'Gemini 2.0 Flash', 4: 'Gemini Flash-Lite' };
+        const MODEL_COLORS = { 1: '#4285f4', 2: '#ea4335', 3: '#7c3aed', 4: '#cc1111' };
+
         // Player Button Component
         function PlayerButton({ player, selected, disabled, onClick }) {
             const className = `player-btn ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`;
-            return React.createElement('button', {
-                className,
-                'data-player': player,
-                onClick: () => !disabled && onClick(player)
-            },
-                React.createElement('img', {
-                    src: `assets/images/characters/player${player}.png`,
-                    alt: `Player ${player}`
-                })
+            return React.createElement('div', { style: { textAlign: 'center' } },
+                React.createElement('button', {
+                    className,
+                    'data-player': player,
+                    onClick: () => !disabled && onClick(player)
+                },
+                    React.createElement('img', {
+                        src: `assets/images/characters/player${player}.png`,
+                        alt: MODEL_NAMES[player]
+                    })
+                ),
+                React.createElement('div', {
+                    style: { fontSize: '7px', color: MODEL_COLORS[player], marginTop: '4px', fontFamily: 'Press Start 2P, monospace', textShadow: '1px 1px 0 #000' }
+                }, MODEL_NAMES[player])
             );
         }
 
@@ -371,7 +380,7 @@
             }, [leftSelected, rightSelected, playClick]);
 
             const handleTransitionComplete = useCallback(() => {
-                window.location.href = `arena.html?p1=${leftSelected}&p2=${rightSelected}`;
+                window.location.href = `arena-ai.html?p1=${leftSelected}&p2=${rightSelected}`;
             }, [leftSelected, rightSelected]);
 
             const isDoneActive = leftSelected !== null && rightSelected !== null;

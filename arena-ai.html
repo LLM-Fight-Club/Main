@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Arena — LLM Fight Club</title>
+    <link rel="stylesheet" href="css/global.css">
+    <link rel="stylesheet" href="css/fighters.css">
+    <link rel="stylesheet" href="css/arena-ai.css">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+
+<body>
+    <!-- Connecting Overlay -->
+    <div class="connect-overlay" id="connect-overlay">
+        <div class="spinner"></div>
+        <p>CONNECTING TO FIGHT SERVER...</p>
+    </div>
+
+    <!-- Top Bar: Health + Timer -->
+    <div class="top-bar">
+        <div class="health-side left">
+            <div class="model-label"><span class="dot" id="p1-dot"></span><span id="p1-model-name">—</span></div>
+            <span class="player-name" id="p1-name">PLAYER 1</span>
+            <div class="health-bar">
+                <div class="health-fill p1" id="p1-health"></div>
+            </div>
+        </div>
+        <div class="timer-box">
+            <div class="timer" id="timer">30</div>
+            <div class="turn-counter" id="turn-counter">TURN 0/30</div>
+        </div>
+        <div class="health-side right">
+            <div class="model-label right"><span id="p2-model-name">—</span><span class="dot" id="p2-dot"></span></div>
+            <span class="player-name" id="p2-name">PLAYER 2</span>
+            <div class="health-bar">
+                <div class="health-fill p2" id="p2-health"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="main-layout">
+        <!-- P1 Chain of Thought -->
+        <div class="cot-panel left" id="cot-p1">
+            <div class="cot-header">
+                <h3>🧠 CHAIN OF THOUGHT</h3>
+                <div class="cot-response-time">Response: <span class="time-val" id="p1-resp-time">—</span></div>
+            </div>
+            <div class="cot-log" id="cot-log-p1"></div>
+        </div>
+
+        <!-- Fight Arena -->
+        <div class="fight-arena" id="fight-arena">
+            <img src="assets/images/arena/pixel arena.jpg" alt="Arena" class="arena-bg"
+                onerror="this.style.background='linear-gradient(180deg,#1a1a3e,#0a0a1e 60%,#2a1a0a)'; this.style.display='block'; this.src='';">
+            <div class="distance-indicator" id="distance-indicator">CLOSE</div>
+
+            <div class="fighter-wrapper" id="fighter1-wrapper">
+                <div class="fighter player1 idle" id="fighter1">
+                    <div class="piece leg-back">
+                        <div class="shoe"></div>
+                    </div>
+                    <div class="piece arm-back">
+                        <div class="glove"></div>
+                    </div>
+                    <div class="piece hips"></div>
+                    <div class="piece torso"></div>
+                    <div class="piece neck"></div>
+                    <div class="piece head">
+                        <div class="hair"></div>
+                        <div class="headband"></div>
+                        <div class="ear"></div>
+                        <div class="eye"></div>
+                        <div class="mouthguard"></div>
+                        <div class="mask"></div>
+                        <div class="peek-eye"></div>
+                    </div>
+                    <div class="piece leg-front">
+                        <div class="shoe"></div>
+                    </div>
+                    <div class="piece arm-front">
+                        <div class="glove"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fighter-wrapper" id="fighter2-wrapper">
+                <div class="fighter player2 idle facing-left" id="fighter2">
+                    <div class="piece leg-back">
+                        <div class="shoe"></div>
+                    </div>
+                    <div class="piece arm-back">
+                        <div class="glove"></div>
+                    </div>
+                    <div class="piece hips"></div>
+                    <div class="piece torso"></div>
+                    <div class="piece neck"></div>
+                    <div class="piece head">
+                        <div class="hair"></div>
+                        <div class="headband"></div>
+                        <div class="ear"></div>
+                        <div class="eye"></div>
+                        <div class="mouthguard"></div>
+                        <div class="mask"></div>
+                        <div class="peek-eye"></div>
+                    </div>
+                    <div class="piece leg-front">
+                        <div class="shoe"></div>
+                    </div>
+                    <div class="piece arm-front">
+                        <div class="glove"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="round-indicator" id="round-indicator" style="display:none">FIGHT!</div>
+        </div>
+
+        <!-- P2 Chain of Thought -->
+        <div class="cot-panel right" id="cot-p2">
+            <div class="cot-header right">
+                <h3>🧠 CHAIN OF THOUGHT</h3>
+                <div class="cot-response-time">Response: <span class="time-val" id="p2-resp-time">—</span></div>
+            </div>
+            <div class="cot-log" id="cot-log-p2"></div>
+        </div>
+    </div>
+
+    <!-- Bottom Bar: Sabotage Stats -->
+    <div class="bottom-bar">
+        <div class="sabotage-panel" id="sab-p1">
+            <div class="crowd-actions left">
+                <button class="crowd-btn cheer" onclick="sendCrowdAction('p1', 'CHEER')">👏 CHEER</button>
+                <button class="crowd-btn boo" onclick="sendCrowdAction('p1', 'BOO')">👎 BOO</button>
+            </div>
+            <div class="sab-stat"><span class="sab-label">TEMP</span><span class="sab-value" id="p1-temp">0.70</span>
+                <div class="sab-bar">
+                    <div class="sab-bar-fill" id="p1-temp-bar" style="width:35%"></div>
+                </div>
+            </div>
+            <div class="sab-stat"><span class="sab-label">TOP_P</span><span class="sab-value" id="p1-topp">1.00</span>
+                <div class="sab-bar">
+                    <div class="sab-bar-fill" id="p1-topp-bar" style="width:100%"></div>
+                </div>
+            </div>
+            <div class="sab-stat"><span class="sab-label">PRES</span><span class="sab-value" id="p1-pres">0.00</span>
+                <div class="sab-bar">
+                    <div class="sab-bar-fill" id="p1-pres-bar" style="width:0%"></div>
+                </div>
+            </div>
+            <div class="sab-stat"><span class="sab-label">FREQ</span><span class="sab-value" id="p1-freq">0.00</span>
+                <div class="sab-bar">
+                    <div class="sab-bar-fill" id="p1-freq-bar" style="width:0%"></div>
+                </div>
+            </div>
+            <div class="sab-stat"><span class="sab-label">TOKENS</span><span class="sab-value" id="p1-tokens">500</span>
+                <div class="sab-bar">
+                    <div class="sab-bar-fill" id="p1-tokens-bar" style="width:100%"></div>
+                </div>
+            </div>
+        </div>
+        <div class="center-info">
+            <div class="speed-compare" id="speed-compare">⚡ Waiting...</div>
+            <div class="speed-compare" id="distance-text">Distance: CLOSE</div>
+        </div>
+        <div class="sabotage-panel" id="sab-p2">
+            <div class="sab-stat"><span class="sab-label">TEMP</span><span class="sab-value" id="p2-temp">0.70</span>
+                <div class="sab-bar">
+                    <div class="sab-bar-fill" id="p2-temp-bar" style="width:35%"></div>
+                </div>
+            </div>
+            <div class="sab-stat"><span class="sab-label">TOP_P</span><span class="sab-value" id="p2-topp">1.00</span>
+                <div class="sab-bar">
+                    <div class="sab-bar-fill" id="p2-topp-bar" style="width:100%"></div>
+                </div>
+            </div>
+            <div class="sab-stat"><span class="sab-label">PRES</span><span class="sab-value" id="p2-pres">0.00</span>
+                <div class="sab-bar">
+                    <div class="sab-bar-fill" id="p2-pres-bar" style="width:0%"></div>
+                </div>
+            </div>
+            <div class="sab-stat"><span class="sab-label">FREQ</span><span class="sab-value" id="p2-freq">0.00</span>
+                <div class="sab-bar">
+                    <div class="sab-bar-fill" id="p2-freq-bar" style="width:0%"></div>
+                </div>
+            </div>
+            <div class="sab-stat"><span class="sab-label">TOKENS</span><span class="sab-value" id="p2-tokens">500</span>
+                <div class="sab-bar">
+                    <div class="sab-bar-fill" id="p2-tokens-bar" style="width:100%"></div>
+                </div>
+            </div>
+            <div class="crowd-actions right">
+                <button class="crowd-btn boo" onclick="sendCrowdAction('p2', 'BOO')">BOO 👎</button>
+                <button class="crowd-btn cheer" onclick="sendCrowdAction('p2', 'CHEER')">CHEER 👏</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Victory Overlay -->
+    <div class="victory-overlay" id="victory-overlay">
+        <h1 id="winner-text">WINNER!</h1>
+        <div class="winner-model" id="winner-model"></div>
+        <div class="stats-grid" id="stats-grid"></div>
+        <button onclick="location.href='select.html'">REMATCH</button>
+        <button onclick="location.href='index.html'">MAIN MENU</button>
+    </div>
+
+    <!-- Audio -->
+    <audio id="bell-sound" src="assets/sounds/bell.mp3"></audio>
+    <audio id="hit-sound" src="assets/sounds/hit.mp3"></audio>
+    <audio id="kick-sound" src="assets/sounds/kick.mp3"></audio>
+    <audio id="thud-sound" src="assets/sounds/thud.mp3"></audio>
+    <audio id="win-sound" src="assets/sounds/win.mp3"></audio>
+
+    <script src="js/arena-ai.js"></script>
+</body>
+
+</html>
