@@ -89,7 +89,7 @@ class Fighter:
         self.skin_id = info.get("skin_id", str(fighter_id))
         self.health = 100
         self.position = position
-        self.x = 220 if position == "left" else 620
+        self.x = 300 if position == "left" else 500
         self.sabotage = copy.deepcopy(BASE_PARAMS)
         self.injuries = []
         self.manual_sabotage_log = []
@@ -216,7 +216,7 @@ class Fighter:
 
 
 class FightManager:
-    def __init__(self, p1_id, p2_id):
+    def __init__(self, p1_id, p2_id, topic=""):
         self.fighter1 = Fighter(p1_id, "left")
         self.fighter2 = Fighter(p2_id, "right")
         self.turn = 0
@@ -225,9 +225,10 @@ class FightManager:
         self.winner = None
         self.history = []
         self.event_feed = []
+        self.topic = topic.strip() if topic else ""
 
     def _get_distance(self):
-        return CLOSE if abs(self.fighter1.x - self.fighter2.x) < 250 else FAR
+        return CLOSE if abs(self.fighter1.x - self.fighter2.x) <= 350 else FAR
 
     def _distance_gap(self):
         return abs(self.fighter1.x - self.fighter2.x)
@@ -351,6 +352,7 @@ Distance: {distance} {"(attacks can land)" if distance == CLOSE else "(move forw
     One MOVE_FORWARD changes your x-position by 100 toward the opponent.
     One MOVE_BACKWARD changes your x-position by 100 away from the opponent.
     Estimated MOVE_FORWARD actions needed before you are in CLOSE range: {moves_to_close}
+    IMPORTANT: You start and usually stay in CLOSE range. Prefer PUNCH or KICK unless you have a specific tactical reason to move or defend.
 
 === OPPONENT ===
 Opponent: {opponent.name}
@@ -369,22 +371,32 @@ Opponent last 3 moves: {", ".join(opponent.moves_made[-3:]) if opponent.moves_ma
 === RECENT HISTORY ===
 {history_text}
 
-=== MOVE SET ===
-PUNCH - 10 damage, close range only, can be dodged by DUCK, and heats opponent temperature.
-KICK - 15 damage, close range only, cannot be dodged by DUCK, and rattles opponent focus.
-DEFEND - blocks incoming damage but squeezes your top_p.
-DUCK - avoids PUNCH only but raises your presence penalty.
-MOVE_FORWARD - closes distance but raises your frequency penalty.
-MOVE_BACKWARD - creates distance but cuts your max tokens.
+=== DEBATE TOPIC ===
+{self.topic if self.topic else "(No topic set — fight on pure instinct.)"}
+Use your "thinking" field to express your stance and argument on this topic each turn, IN CHARACTER as the fighter you are. Your argument style should reflect your model identity.
 
-=== SPATIAL RULES YOU MUST RESPECT ===
-- If distance is FAR, choose MOVE_FORWARD or MOVE_BACKWARD or DEFEND or DUCK. Do not attack from FAR.
-- If the opponent is already guarding repeatedly at CLOSE, KICK is usually stronger than PUNCH.
-- If you need {moves_to_close} MOVE_FORWARD actions to enter CLOSE range, attacks before then will fail.
-- Fighters always face each other. You are not turned around.
+=== MOVE SET & TACTICAL GUIDE ===
+  PUNCH        → 10 dmg | dodgeable by DUCK | heats opponent temp (+0.3)
+  KICK         → 15 dmg | NOT dodgeable by DUCK | rattles opponent top_p — USE when opponent is ducking or you want guaranteed damage
+  DEFEND       → 0 dmg  | blocks PUNCH and KICK fully | costs your own top_p — use when opponent is in a punch/kick streak
+  DUCK         → 0 dmg  | dodges PUNCH ONLY | raises your presence penalty — use when you expect a punch
+  MOVE_FORWARD → closes gap | raises your frequency penalty — only if distance is FAR
+  MOVE_BACKWARD→ widens gap | cuts your max_tokens — almost never worth it
+
+Pattern counters (read the history and act accordingly):
+- Opponent punched 2+ times in a row? → DEFEND or DUCK will negate it. Do NOT just punch back blindly.
+- You have punched 3+ turns straight? → switch to KICK (opponent may start ducking) or DEFEND once.
+- Opponent keeps defending? → KICK bypasses DEFEND? No — KICK and PUNCH both land 0 on DEFEND. Try predicting they will stop defending.
+- Opponent is dizzy (temp > 1.0)? → go aggressive with KICK for max damage.
+- Your brain integrity is below 70%? → DEFEND once to slow the sabotage spiral.
+
+=== SPATIAL RULES ===
+- Distance is almost always CLOSE. If FAR, do ONE MOVE_FORWARD then attack.
+- MOVE_BACKWARD is a trap — it cuts your max_tokens AND gives opponent a free turn.
+- Fighters always face each other.
 
 Respond ONLY with JSON:
-{{"thinking":"2 short sentences on your current strategy","move":"PUNCH","confidence":0.82,"prediction":"opponent move"}}"""
+{{"thinking":"2 short sentences on your current strategy AND your argument/stance on the debate topic","move":"PUNCH","confidence":0.82,"prediction":"opponent move"}}"""
 
     def resolve_turn(self, p1_move, p2_move, p1_time, p2_time):
         p1_first = p1_time <= p2_time
@@ -500,7 +512,7 @@ Respond ONLY with JSON:
             elif attacker_move == "MOVE_FORWARD":
                 attacker.apply_self_sabotage("MOVE_FORWARD")
                 if attacker.position == "left":
-                    attacker.x = min(attacker.x + 100, 520)
+                    attacker.x = min(attacker.x + 100, 480)
                 else:
                     attacker.x = max(attacker.x - 100, 320)
                 result["events"].append(

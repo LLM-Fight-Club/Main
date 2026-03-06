@@ -8,14 +8,129 @@
     <link rel="stylesheet" href="css/global.css">
     <link rel="stylesheet" href="css/fighters.css">
     <link rel="stylesheet" href="css/arena-ai.css">
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="js/socket.io.min.js"></script>
 </head>
 
 <body>
-    <div class="connect-overlay" id="connect-overlay">
+    <!-- Topic prompt modal - shown before the fight starts -->
+    <div class="topic-modal-overlay" id="topic-modal">
+        <div class="topic-modal-box">
+            <div class="topic-modal-title">&#9876; WHAT DO THEY FIGHT ABOUT?</div>
+            <p class="topic-modal-sub">Give the LLMs a debate topic, question, or prompt to argue over while they battle. Their reasoning will reflect it every turn.</p>
+            <input
+                class="topic-input"
+                id="topic-input"
+                type="text"
+                maxlength="300"
+                placeholder="e.g. Is Python better than JavaScript?"
+                autocomplete="off"
+            />
+            <div class="topic-examples">
+                <span class="topic-example-label">Examples:</span>
+                <button class="topic-chip" onclick="setTopic('Is AI going to replace programmers?')">AI vs programmers</button>
+                <button class="topic-chip" onclick="setTopic('Tabs vs spaces — which is better?')">Tabs vs spaces</button>
+                <button class="topic-chip" onclick="setTopic('Should social media be banned for under 18s?')">Social media ban</button>
+                <button class="topic-chip" onclick="setTopic('Is the moon landing real?')">Moon landing</button>
+            </div>
+            <button class="topic-start-btn" id="topic-start-btn" onclick="beginFight()">&#9654; BEGIN FIGHT</button>
+        </div>
+    </div>
+
+    <style>
+    .topic-modal-overlay {
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(0,0,0,0.92);
+        display: flex; align-items: center; justify-content: center;
+    }
+    .topic-modal-box {
+        background: #0d0d1a;
+        border: 2px solid #4af;
+        box-shadow: 0 0 40px #4af6, 0 0 80px #0048ff44;
+        padding: 2.2rem 2.8rem;
+        max-width: 540px; width: 92%;
+        text-align: center;
+        font-family: 'Press Start 2P', monospace, sans-serif;
+        image-rendering: pixelated;
+    }
+    .topic-modal-title {
+        color: #4af;
+        font-size: 1rem;
+        letter-spacing: 0.05em;
+        margin-bottom: 1rem;
+        text-transform: uppercase;
+        text-shadow: 0 0 12px #4af;
+    }
+    .topic-modal-sub {
+        color: #aaa;
+        font-size: 0.48rem;
+        line-height: 1.8;
+        margin-bottom: 1.4rem;
+        font-family: monospace;
+    }
+    .topic-input {
+        width: 100%;
+        box-sizing: border-box;
+        background: #111;
+        border: 1.5px solid #4af;
+        color: #fff;
+        font-size: 0.72rem;
+        padding: 0.65rem 0.9rem;
+        outline: none;
+        margin-bottom: 1rem;
+        font-family: monospace;
+        letter-spacing: 0.02em;
+    }
+    .topic-input:focus { border-color: #7df; box-shadow: 0 0 8px #4af6; }
+    .topic-examples {
+        display: flex; flex-wrap: wrap; gap: 0.4rem;
+        justify-content: center;
+        margin-bottom: 1.2rem;
+        align-items: center;
+    }
+    .topic-example-label { color: #666; font-size: 0.4rem; font-family: monospace; }
+    .topic-chip {
+        background: #111; border: 1px solid #4af4;
+        color: #4af; font-size: 0.38rem;
+        padding: 0.3rem 0.55rem; cursor: pointer;
+        font-family: monospace;
+        transition: background 0.15s;
+    }
+    .topic-chip:hover { background: #0a1f33; }
+    .topic-start-btn {
+        background: #4af;
+        color: #000;
+        border: none;
+        font-size: 0.75rem;
+        padding: 0.75rem 2rem;
+        cursor: pointer;
+        font-family: 'Press Start 2P', monospace;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        transition: background 0.15s, box-shadow 0.15s;
+        box-shadow: 0 0 16px #4af8;
+    }
+    .topic-start-btn:hover { background: #7df; box-shadow: 0 0 28px #4aff; }
+    .topic-banner {
+        background: #0a1520;
+        border-bottom: 1px solid #4af4;
+        color: #7df;
+        font-size: 0.42rem;
+        font-family: monospace;
+        padding: 0.3rem 1rem;
+        text-align: center;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    </style>
+
+    <div class="connect-overlay" id="connect-overlay" style="display:none">
         <div class="spinner"></div>
         <p>CONNECTING TO FIGHT SERVER...</p>
     </div>
+
+    <div class="topic-banner" id="topic-banner" style="display:none"></div>
 
     <div class="top-bar">
         <div class="health-side left">

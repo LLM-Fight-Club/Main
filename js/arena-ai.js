@@ -1,13 +1,56 @@
 /**
- * AI arena client.
- *
- * Connects to the Python backend, animates both fighters, renders decision
- * traces, and exposes live sabotage controls.
+ * AI arena client — clean flat structure, no nested initSocket wrapper.
  */
 
+// ─── URL params ─────────────────────────────────────────────────────────────
 const urlParams = new URLSearchParams(window.location.search);
 const p1Selection = urlParams.get('p1') || '1';
 const p2Selection = urlParams.get('p2') || '2';
+
+let fightTopic = '';
+let socket = null;
+
+function setTopic(text) {
+    const input = document.getElementById('topic-input');
+    if (input) input.value = text;
+}
+
+function beginFight() {
+    const input = document.getElementById('topic-input');
+    const raw = input ? input.value.trim() : '';
+    // Use default topic if nothing entered
+    fightTopic = raw || 'Who is the superior intelligence?';
+
+    // Show the topic banner in the arena
+    const banner = document.getElementById('topic-banner');
+    if (banner) {
+        banner.textContent = '\u2694 TOPIC: ' + fightTopic;
+        banner.style.display = 'block';
+    }
+
+    // Swap modal -> connect overlay
+    document.getElementById('topic-modal').style.display = 'none';
+    document.getElementById('connect-overlay').style.display = 'flex';
+
+    try {
+        initSocket();
+    } catch (err) {
+        document.getElementById('connect-overlay').style.display = 'none';
+        document.getElementById('topic-modal').style.display = 'flex';
+        alert('Failed to start fight: ' + err.message);
+    }
+}
+
+window.setTopic = setTopic;
+window.beginFight = beginFight;
+
+// Allow pressing Enter in the topic input
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('topic-input');
+    if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') beginFight(); });
+});
+
+function initSocket() {
 const FALLBACK_SKINS = {
     '1': '1',
     '2': '2',
@@ -308,6 +351,23 @@ function stopSparkles() {
     document.querySelectorAll('.sparkle').forEach((sparkle) => sparkle.remove());
 }
 
+function updateFighterPositions(p1x, p2x) {
+    const arena = document.getElementById('fight-arena');
+    const f1Wrapper = document.getElementById('fighter1-wrapper');
+    const f2Wrapper = document.getElementById('fighter2-wrapper');
+    if (!arena || !f1Wrapper || !f2Wrapper) return;
+    const W = arena.offsetWidth || 840;
+    const VISUAL_SPAN = W * 0.55;
+    const ORIGIN = (W - VISUAL_SPAN) / 2;
+    const BACK_MIN = 120, BACK_MAX = 720;
+    const f1Left = ORIGIN + ((p1x - BACK_MIN) / (BACK_MAX - BACK_MIN)) * VISUAL_SPAN;
+    const f2Left = ORIGIN + ((p2x - BACK_MIN) / (BACK_MAX - BACK_MIN)) * VISUAL_SPAN;
+    f1Wrapper.style.left = `${Math.round(f1Left)}px`;
+    f1Wrapper.style.right = 'auto';
+    f2Wrapper.style.left = `${Math.round(f2Left)}px`;
+    f2Wrapper.style.right = 'auto';
+}
+
 function renderTurnEvents(events) {
     eventFeed.innerHTML = '';
     (events || []).slice(-4).forEach((event) => {
@@ -386,16 +446,20 @@ const socketBaseUrl = window.location.origin.startsWith('http')
     ? window.location.origin
     : 'http://localhost:5000';
 
-const socket = io(socketBaseUrl, {
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionDelay: 2000,
-});
+    let fightStarted = false;
 
-socket.on('connect', () => {
-    connectOverlay.style.display = 'none';
-    socket.emit('start_fight', { p1: p1Selection, p2: p2Selection });
-});
+    socket = io(socketBaseUrl, {
+        transports: ['websocket', 'polling'],
+        reconnection: false,
+    });
+
+    socket.on('connect', () => {
+        connectOverlay.style.display = 'none';
+        if (!fightStarted) {
+            fightStarted = true;
+            socket.emit('start_fight', { p1: p1Selection, p2: p2Selection, topic: fightTopic });
+        }
+    });
 
 socket.on('connect_error', (error) => {
     const label = connectOverlay.querySelector('p');
@@ -421,6 +485,7 @@ socket.on('fight_started', (data) => {
     updateSabotageUI('p2', data.p2);
     updateHealth('p1-health', data.p1.health);
     updateHealth('p2-health', data.p2.health);
+    if (data.p1.x != null && data.p2.x != null) updateFighterPositions(data.p1.x, data.p2.x);
 
     roundIndicator.style.display = 'block';
     roundIndicator.textContent = 'FIGHT!';
@@ -468,6 +533,7 @@ socket.on('turn_result', (data) => {
 
     updateSabotageUI('p1', data.p1);
     updateSabotageUI('p2', data.p2);
+    if (data.p1.x != null && data.p2.x != null) updateFighterPositions(data.p1.x, data.p2.x);
 
     addCotEntry(cotLogP1, data.turn, data.p1);
     addCotEntry(cotLogP2, data.turn, data.p2);
@@ -536,13 +602,14 @@ socket.on('fight_over', (data) => {
     }
 });
 
+    window.addEventListener('beforeunload', () => {
+        socket.emit('stop_fight');
+        socket.disconnect();
+    });
+} // end initSocket()
+
 function sendSabotageAction(player, action) {
-    socket.emit('sabotage_action', { player, action });
+    if (socket) socket.emit('sabotage_action', { player, action });
 }
 
 window.sendSabotageAction = sendSabotageAction;
-
-window.addEventListener('beforeunload', () => {
-    socket.emit('stop_fight');
-    socket.disconnect();
-});
