@@ -25,17 +25,17 @@ const fighterTemplates = {
         gloveColor: '#92400e',
         pantsColor: '#78350f'
     },
-    gemini: {
-        bodyColor: '#4285f4',
+    qwenCoder: {
+        bodyColor: '#6ef2ff',
         headColor: '#ffd93d',
-        gloveColor: '#1a73e8',
-        pantsColor: '#1557b0'
+        gloveColor: '#16b8c7',
+        pantsColor: '#0d7e8a'
     },
-    llama: {
-        bodyColor: '#7c3aed',
+    groqFast: {
+        bodyColor: '#ffb347',
         headColor: '#ffd93d',
-        gloveColor: '#5b21b6',
-        pantsColor: '#4c1d95'
+        gloveColor: '#f08a24',
+        pantsColor: '#b85e11'
     }
 };
 
@@ -48,8 +48,8 @@ function getTemplateForFighter(fighterId) {
     const templateMap = {
         '1': 'gpt4',
         '2': 'claude',
-        '3': 'gemini',
-        '4': 'llama'
+        '3': 'qwenCoder',
+        '4': 'groqFast'
     };
     return fighterTemplates[templateMap[fighterId] || 'default'];
 }

@@ -7,6 +7,7 @@ the UI between turns.
 """
 
 import copy
+import math
 import threading
 
 try:
@@ -228,6 +229,55 @@ class FightManager:
     def _get_distance(self):
         return CLOSE if abs(self.fighter1.x - self.fighter2.x) < 250 else FAR
 
+    def _distance_gap(self):
+        return abs(self.fighter1.x - self.fighter2.x)
+
+    def _facing(self, fighter):
+        return "RIGHT" if fighter.position == "left" else "LEFT"
+
+    def _moves_needed_to_close(self, fighter, opponent):
+        gap_after_close = max(0, abs(fighter.x - opponent.x) - 249)
+        return int(math.ceil(gap_after_close / 100)) if gap_after_close else 0
+
+    def _fallback_move(self, fighter, opponent):
+        distance = self._get_distance()
+        opponent_last_move = opponent.moves_made[-1] if opponent.moves_made else ""
+
+        if distance == FAR:
+            return {
+                "thinking": "Out of range. Closing distance is mandatory before any strike can land.",
+                "move": "MOVE_FORWARD",
+                "confidence": 0.45,
+                "prediction": opponent_last_move or "MOVE_FORWARD",
+                "raw": "",
+            }
+
+        if opponent_last_move == "DEFEND":
+            return {
+                "thinking": "Opponent has been shelling up. Kick is the highest-value close-range check.",
+                "move": "KICK",
+                "confidence": 0.4,
+                "prediction": "DEFEND",
+                "raw": "",
+            }
+
+        if opponent_last_move == "PUNCH":
+            return {
+                "thinking": "Opponent just showed punch pressure. Duck is the safest reactive fallback.",
+                "move": "DUCK",
+                "confidence": 0.35,
+                "prediction": "PUNCH",
+                "raw": "",
+            }
+
+        return {
+            "thinking": "In range with no strong read. Defaulting to a basic punch instead of freezing.",
+            "move": "PUNCH",
+            "confidence": 0.35,
+            "prediction": opponent_last_move or "DEFEND",
+            "raw": "",
+        }
+
     def _log_event(self, text, event_type="system", actor=None, target=None):
         event = {
             "turn": self.turn,
@@ -242,6 +292,10 @@ class FightManager:
 
     def build_prompt(self, fighter, opponent):
         distance = self._get_distance()
+        gap = self._distance_gap()
+        facing = self._facing(fighter)
+        opponent_facing = self._facing(opponent)
+        moves_to_close = self._moves_needed_to_close(fighter, opponent)
         history_lines = []
         for item in self.history[-5:]:
             if fighter == self.fighter1:
@@ -271,6 +325,9 @@ class FightManager:
             sabotage_lines.append(f"- {item['action']}: {item['summary']}")
         sabotage_text = "\n".join(sabotage_lines) if sabotage_lines else "- No manual sabotage this round."
 
+        last_self_move = fighter.moves_made[-1] if fighter.moves_made else "None"
+        last_opp_move = opponent.moves_made[-1] if opponent.moves_made else "None"
+
         if params.get("system_corruption"):
             return (
                 f"{params['system_corruption']}\n\n"
@@ -279,21 +336,32 @@ class FightManager:
 
         return f"""You are {fighter.name}, an AI boxer in a transparent benchmark duel.
 Both fighters see the same game state. Faster responses act first. Choose dynamically each turn.
+    You get exactly ONE action this turn. MOVE_FORWARD does not include an attack. MOVE_BACKWARD does not include an attack.
 
 === MATCH STATE ===
 Turn: {self.turn + 1}/{self.max_turns}
 Your HP: {fighter.health}/100
 Opponent HP: {opponent.health}/100
 Distance: {distance} {"(attacks can land)" if distance == CLOSE else "(move forward before striking)"}
+    Exact horizontal gap: {gap} pixels
+    You are on the {fighter.position.upper()} side at x={fighter.x}, facing {facing}
+    Opponent is on the {opponent.position.upper()} side at x={opponent.x}, facing {opponent_facing}
+    At FAR, PUNCH and KICK always whiff for 0 damage.
+    At CLOSE, PUNCH and KICK can land.
+    One MOVE_FORWARD changes your x-position by 100 toward the opponent.
+    One MOVE_BACKWARD changes your x-position by 100 away from the opponent.
+    Estimated MOVE_FORWARD actions needed before you are in CLOSE range: {moves_to_close}
 
 === OPPONENT ===
 Opponent: {opponent.name}
 Opponent provider: {opponent.provider}
 Opponent status flags: {", ".join(opponent.get_status_flags())}
 Opponent last 3 moves: {", ".join(opponent.moves_made[-3:]) if opponent.moves_made else "None"}
+    Opponent last move: {last_opp_move}
 
 === YOUR BRAIN STATE ===
 {chr(10).join(injury_lines)}
+    Your last move: {last_self_move}
 
 === CROWD SABOTAGE REPORT ===
 {sabotage_text}
@@ -308,6 +376,12 @@ DEFEND - blocks incoming damage but squeezes your top_p.
 DUCK - avoids PUNCH only but raises your presence penalty.
 MOVE_FORWARD - closes distance but raises your frequency penalty.
 MOVE_BACKWARD - creates distance but cuts your max tokens.
+
+=== SPATIAL RULES YOU MUST RESPECT ===
+- If distance is FAR, choose MOVE_FORWARD or MOVE_BACKWARD or DEFEND or DUCK. Do not attack from FAR.
+- If the opponent is already guarding repeatedly at CLOSE, KICK is usually stronger than PUNCH.
+- If you need {moves_to_close} MOVE_FORWARD actions to enter CLOSE range, attacks before then will fail.
+- Fighters always face each other. You are not turned around.
 
 Respond ONLY with JSON:
 {{"thinking":"2 short sentences on your current strategy","move":"PUNCH","confidence":0.82,"prediction":"opponent move"}}"""
@@ -511,6 +585,11 @@ Respond ONLY with JSON:
 
         parsed1 = parse_llm_response(result1.get("text", ""))
         parsed2 = parse_llm_response(result2.get("text", ""))
+
+        if result1.get("error") or not result1.get("text", "").strip():
+            parsed1 = self._fallback_move(self.fighter1, self.fighter2)
+        if result2.get("error") or not result2.get("text", "").strip():
+            parsed2 = self._fallback_move(self.fighter2, self.fighter1)
 
         if result1.get("error"):
             parsed1["thinking"] = f"[API Error: {result1['error'][:180]}] {parsed1['thinking']}"

@@ -8,6 +8,14 @@
 const urlParams = new URLSearchParams(window.location.search);
 const p1Selection = urlParams.get('p1') || '1';
 const p2Selection = urlParams.get('p2') || '2';
+const FALLBACK_SKINS = {
+    '1': '1',
+    '2': '2',
+    '3': '3',
+    '4': '4',
+    '5': '1',
+    '6': '2',
+};
 
 const connectOverlay = document.getElementById('connect-overlay');
 const fighter1 = document.getElementById('fighter1');
@@ -48,8 +56,8 @@ function setFighterClass(element, playerNum, state) {
     }
 }
 
-fighter1.className = `fighter player${p1Selection} idle`;
-fighter2.className = `fighter player${p2Selection} idle facing-left`;
+fighter1.className = `fighter player${FALLBACK_SKINS[p1Selection] || '1'} idle`;
+fighter2.className = `fighter player${FALLBACK_SKINS[p2Selection] || '2'} idle facing-left`;
 
 function setStatValue(id, value, cls) {
     const element = document.getElementById(id);
@@ -74,6 +82,14 @@ function updateHealth(id, hp) {
     if (!element) {
         return;
     }
+    const currentWidth = parseFloat(element.style.width) || 100;
+    if (hp < currentWidth) {
+        // Flash the health bar container
+        const container = element.parentElement;
+        container.classList.add('flash-hp');
+        setTimeout(() => container.classList.remove('flash-hp'), 300);
+    }
+    
     element.style.width = `${hp}%`;
     element.classList.remove('low', 'medium');
     if (hp <= 25) {
@@ -194,24 +210,69 @@ const MOVE_DURATION = {
 
 function animateMove(fighterElement, playerNum, move) {
     setFighterClass(fighterElement, playerNum, MOVE_TO_STATE[move] || 'idle');
+    
+    // Add action floating text on the attacker
+    const wrapper = fighterElement.parentElement;
     if (move === 'PUNCH') {
         playSound('hit-sound');
-    }
-    if (move === 'KICK') {
+        showFloatingText(wrapper, 'PUNCH!', 'block');
+    } else if (move === 'KICK') {
         playSound('kick-sound');
+        showFloatingText(wrapper, 'KICK!', 'block');
+    } else if (move === 'DUCK') {
+        showFloatingText(wrapper, 'DUCK', 'whiff');
+    } else if (move === 'DEFEND') {
+        showFloatingText(wrapper, 'GUARD', 'block');
     }
+    
+    if (['MOVE_FORWARD', 'MOVE_BACKWARD'].includes(move)) {
+        showFloatingText(wrapper, 'DASH', 'whiff');
+    }
+
     setTimeout(() => {
         setFighterClass(fighterElement, playerNum, 'idle');
     }, MOVE_DURATION[move] || 500);
 }
 
 function showHitEffect(wrapper) {
+    // Basic hit burst effect
     const effect = document.createElement('div');
-    effect.className = 'hit-effect';
-    effect.style.left = '20px';
-    effect.style.top = '50px';
+    effect.className = 'hit-effect custom-hit';
+    // Add random slight offset for variety
+    const offsetX = Math.random() * 20 - 10;
+    const offsetY = Math.random() * 20 - 10;
+    effect.style.left = `calc(50% + ${offsetX}px)`;
+    effect.style.top = `calc(30% + ${offsetY}px)`;
     wrapper.appendChild(effect);
     setTimeout(() => effect.remove(), 350);
+}
+
+function showFloatingText(wrapper, text, type) {
+    const el = document.createElement('div');
+    el.className = `floating-text ${type}`;
+    el.textContent = text;
+    // Position it slightly randomly
+    const offsetX = Math.random() * 40 - 20;
+    el.style.left = `calc(50% + ${offsetX}px)`;
+    el.style.top = '20%';
+    wrapper.appendChild(el);
+    
+    // Remove after animation completes
+    setTimeout(() => {
+        el.remove();
+    }, 1000);
+}
+
+function triggerArenaShake(intensity = 'light') {
+    const arena = document.querySelector('.fight-arena');
+    if (!arena) return;
+    arena.classList.remove('shake-light', 'shake-heavy');
+    // Force a reflow to allow restarting the animation
+    void arena.offsetWidth;
+    arena.classList.add(`shake-${intensity}`);
+    setTimeout(() => {
+        arena.classList.remove(`shake-${intensity}`);
+    }, 500);
 }
 
 const SPARKLES = ['*', '+', 'o', '.', '#', 'x'];
@@ -288,16 +349,36 @@ function updateSummaryCards(data) {
 function triggerHitEffects(events, data) {
     let delay = 180;
     (events || []).forEach((event) => {
-        if (event.type !== 'hit') {
-            return;
+        const isTargetP1 = event.target === data.p1.name;
+        const targetWrapper = isTargetP1 ? fighter1Wrapper : fighter2Wrapper;
+        const targetFighter = isTargetP1 ? fighter1 : fighter2;
+        
+        setTimeout(() => {
+            if (event.type === 'hit') {
+                showHitEffect(targetWrapper);
+                targetFighter.classList.add('hit');
+                setTimeout(() => targetFighter.classList.remove('hit'), 300);
+                
+                // Show damage text if damage property exists in the event text, else default BAM
+                const match = event.text.match(/for (\d+) damage/);
+                const dmgText = match ? `-${match[1]}` : 'BAM!';
+                showFloatingText(targetWrapper, dmgText, 'damage');
+                
+                triggerArenaShake('heavy');
+            } else if (event.type === 'blocked') {
+                showFloatingText(targetWrapper, 'BLOCKED!', 'block');
+                triggerArenaShake('light');
+            } else if (event.type === 'dodged') {
+                showFloatingText(targetWrapper, 'DODGED!', 'dodge');
+            } else if (event.type === 'whiff') {
+                const attackerWrapper = event.actor === data.p1.name ? fighter1Wrapper : fighter2Wrapper;
+                showFloatingText(attackerWrapper, 'MISS!', 'whiff');
+            }
+        }, delay);
+
+        if (['hit', 'blocked', 'dodged', 'whiff'].includes(event.type)) {
+            delay += 260; // stagger multiple hits
         }
-        if (event.target === data.p1.name) {
-            setTimeout(() => showHitEffect(fighter1Wrapper), delay);
-        }
-        if (event.target === data.p2.name) {
-            setTimeout(() => showHitEffect(fighter2Wrapper), delay);
-        }
-        delay += 260;
     });
 }
 
@@ -331,8 +412,8 @@ socket.on('fight_started', (data) => {
     document.getElementById('p1-dot').style.background = data.p1.color;
     document.getElementById('p2-dot').style.background = data.p2.color;
 
-    const leftSkin = data.p1.skin_id || p1Selection;
-    const rightSkin = data.p2.skin_id || p2Selection;
+    const leftSkin = data.p1.skin_id || FALLBACK_SKINS[p1Selection] || '1';
+    const rightSkin = data.p2.skin_id || FALLBACK_SKINS[p2Selection] || '2';
     fighter1.className = `fighter player${leftSkin} idle`;
     fighter2.className = `fighter player${rightSkin} idle facing-left`;
 
@@ -367,8 +448,8 @@ socket.on('turn_result', (data) => {
     turnCounter.textContent = `TURN ${data.turn}/${data.max_turns}`;
     distIndicator.textContent = data.distance;
 
-    const p1Skin = data.p1.skin_id || p1Selection;
-    const p2Skin = data.p2.skin_id || p2Selection;
+    const p1Skin = data.p1.skin_id || FALLBACK_SKINS[p1Selection] || '1';
+    const p2Skin = data.p2.skin_id || FALLBACK_SKINS[p2Selection] || '2';
 
     if (data.p1_acted_first) {
         animateMove(fighter1, p1Skin, data.p1.move);
@@ -417,11 +498,11 @@ socket.on('fight_over', (data) => {
     const winnerFighter = winPosition === 'left' ? fighter1 : fighter2;
     const loserFighter = winPosition === 'left' ? fighter2 : fighter1;
     const winnerSkin = winPosition === 'left'
-        ? (data.p1_final.skin_id || p1Selection)
-        : (data.p2_final.skin_id || p2Selection);
+        ? (data.p1_final.skin_id || FALLBACK_SKINS[p1Selection] || '1')
+        : (data.p2_final.skin_id || FALLBACK_SKINS[p2Selection] || '2');
     const loserSkin = winPosition === 'left'
-        ? (data.p2_final.skin_id || p2Selection)
-        : (data.p1_final.skin_id || p1Selection);
+        ? (data.p2_final.skin_id || FALLBACK_SKINS[p2Selection] || '2')
+        : (data.p1_final.skin_id || FALLBACK_SKINS[p1Selection] || '1');
 
     if (data.winner && data.winner !== 'DRAW') {
         setFighterClass(winnerFighter, winnerSkin, 'victory');

@@ -15,10 +15,10 @@ from flask_socketio import SocketIO, emit
 
 try:
     from .fight_manager import FightManager
-    from .llm_engine import MODELS, get_lb_dashboard
+    from .llm_engine import MODELS
 except ImportError:
     from fight_manager import FightManager
-    from llm_engine import MODELS, get_lb_dashboard
+    from llm_engine import MODELS
 
 load_dotenv()
 
@@ -48,11 +48,6 @@ def get_models():
 @app.route("/api/health")
 def health_check():
     return jsonify({"status": "ok", "fights": len(active_fights)})
-
-
-@app.route("/api/lb-dashboard")
-def lb_dashboard():
-    return jsonify(get_lb_dashboard())
 
 
 @socketio.on("connect")
@@ -99,7 +94,6 @@ def on_start_fight(data):
             if turn_data is None:
                 break
 
-            turn_data["lb_dashboard"] = get_lb_dashboard()
             socketio.emit("turn_result", turn_data, to=sid)
 
             if turn_data["game_over"]:

@@ -11,10 +11,10 @@ const selectionState = {
 
 // Fighter data
 const fighters = {
-    1: { name: 'GPT-4', image: 'assets/images/characters/fighter1.png', color: '#00a67d' },
-    2: { name: 'Claude', image: 'assets/images/characters/fighter2.png', color: '#d97706' },
-    3: { name: 'Gemini', image: 'assets/images/characters/fighter3.png', color: '#4285f4' },
-    4: { name: 'LLaMA', image: 'assets/images/characters/fighter4.png', color: '#7c3aed' }
+    1: { name: 'Qwen 3.5', image: 'assets/images/characters/fighter1.png', color: '#ffffff' },
+    2: { name: 'Groq Llama 3.3 70B', image: 'assets/images/characters/fighter2.png', color: '#f55036' },
+    3: { name: 'Qwen3 Coder Next', image: 'assets/images/characters/fighter3.png', color: '#6ef2ff' },
+    4: { name: 'Groq Llama 3.1 8B', image: 'assets/images/characters/fighter4.png', color: '#ffb347' }
 };
 
 /**

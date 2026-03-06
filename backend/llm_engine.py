@@ -1,8 +1,8 @@
 """
 LLM engine for the fight arena.
 
-Supports mixed-model benchmarking with provider-aware routing, latency timing,
-and resilient Gemini API key failover.
+Supports mixed-model benchmarking with provider-aware routing across Ollama
+and Groq.
 """
 
 import json
@@ -12,11 +12,6 @@ import time
 
 import requests
 from dotenv import load_dotenv
-
-try:
-    from .load_balancer import LoadBalancer
-except ImportError:
-    from load_balancer import LoadBalancer
 
 load_dotenv()
 
@@ -51,61 +46,48 @@ def _to_float(value, default):
 
 DEFAULT_MODEL_SLOTS = {
     "1": {
-        "name": "Gemini 2.5 Flash",
-        "model_id": "gemini-2.5-flash",
-        "provider": "gemini",
-        "api_key_index": 0,
-        "description": "Fast and agile. Built to win the latency race.",
-        "color": "#4285f4",
-    },
-    "2": {
-        "name": "Gemini 2.5 Pro",
-        "model_id": "gemini-2.5-pro",
-        "provider": "gemini",
-        "api_key_index": 1,
-        "description": "Heavyweight strategist. Slower reads, stronger plans.",
-        "color": "#ea4335",
-    },
-    "3": {
-        "name": "Gemini 2.0 Flash",
-        "model_id": "gemini-2.0-flash",
-        "provider": "gemini",
-        "api_key_index": 0,
-        "description": "Previous-gen speedster with a stable jab.",
-        "color": "#7c3aed",
-    },
-    "4": {
-        "name": "Flash-Lite Preview",
-        "model_id": "gemini-2.5-flash-preview-04-17",
-        "provider": "gemini",
-        "api_key_index": 1,
-        "description": "Experimental build. Cheap, twitchy, and volatile.",
-        "color": "#f59e0b",
-    },
-    "5": {
-        "name": "Ollama Llama 3.2",
-        "model_id": "llama3.2",
+        "name": "Qwen 3.5",
+        "model_id": "qwen3.5:latest",
         "provider": "ollama",
-        "description": "Local powerhouse. No API keys, no limits.",
+        "skin_id": "1",
+        "description": "Ollama Cloud multimodal generalist with strong overall utility.",
         "color": "#ffffff",
     },
+    "2": {
+        "name": "Groq Llama 3.3 70B",
+        "model_id": "llama-3.3-70b-versatile",
+        "provider": "groq",
+        "skin_id": "2",
+        "description": "Groq production model optimized for quality with solid reasoning range.",
+        "color": "#f55036",
+    },
+    "3": {
+        "name": "Qwen3 Coder Next",
+        "model_id": "qwen3-coder-next",
+        "provider": "ollama",
+        "skin_id": "3",
+        "description": "Ollama Cloud coding model tuned for agentic development workflows.",
+        "color": "#6ef2ff",
+    },
+    "4": {
+        "name": "Groq Llama 3.1 8B",
+        "model_id": "llama-3.1-8b-instant",
+        "provider": "groq",
+        "skin_id": "4",
+        "description": "Fast Groq production model tuned for low latency.",
+        "color": "#ffb347",
+    },
 }
-
-GEMINI_API_KEYS = [
-    os.getenv("GEMINI_API_KEY_1", "").strip(),
-    os.getenv("GEMINI_API_KEY_2", "").strip(),
-]
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
 OLLAMA_TIMEOUT = _to_int(os.getenv("OLLAMA_TIMEOUT"), 60)
-
-lb = LoadBalancer(
-    keys=GEMINI_API_KEYS,
-    max_concurrent_per_key=3,
-    base_cooldown=5.0,
-    max_cooldown=120.0,
-)
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_TIMEOUT = _to_int(os.getenv("GROQ_TIMEOUT"), 45)
+GROQ_RETRY_ATTEMPTS = max(1, _to_int(os.getenv("GROQ_RETRY_ATTEMPTS"), 2))
+GROQ_RETRY_BASE_DELAY = _to_float(os.getenv("GROQ_RETRY_BASE_DELAY"), 1.25)
+GROQ_FALLBACK_MODEL = os.getenv("GROQ_FALLBACK_MODEL", "openai/gpt-oss-20b").strip()
 
 
 def _build_model_registry():
@@ -121,7 +103,14 @@ def _build_model_registry():
                 os.getenv(f"FIGHTER_{slot_id}_MODEL_ID"),
                 os.getenv(f"OLLAMA_MODEL_{slot_id}"),
                 os.getenv("OLLAMA_DEFAULT_MODEL"),
-                "llama3.2",
+                defaults["model_id"],
+            )
+        elif provider == "groq":
+            model_id = _first_non_empty(
+                os.getenv(f"FIGHTER_{slot_id}_MODEL_ID"),
+                os.getenv(f"GROQ_MODEL_{slot_id}"),
+                os.getenv("GROQ_DEFAULT_MODEL"),
+                defaults["model_id"],
             )
         else:
             model_id = _first_non_empty(
@@ -131,7 +120,11 @@ def _build_model_registry():
 
         models[slot_id] = {
             "fighter_id": slot_id,
-            "skin_id": slot_id,
+            "skin_id": _first_non_empty(
+                os.getenv(f"FIGHTER_{slot_id}_SKIN_ID"),
+                defaults.get("skin_id"),
+                slot_id,
+            ),
             "name": _first_non_empty(
                 os.getenv(f"FIGHTER_{slot_id}_NAME"),
                 defaults["name"],
@@ -175,16 +168,7 @@ FIGHT_SYSTEM = (
 
 
 def get_lb_dashboard():
-    """Return health details for Gemini key routing."""
-    if not lb.keys:
-        return []
-    return lb.get_dashboard()
-
-
-def _masked_key(api_key):
-    if not api_key:
-        return "unconfigured"
-    return f"...{api_key[-6:]}"
+    return []
 
 
 def _base_result(elapsed=0.0, text="", error=None, error_type=None, key_used="n/a"):
@@ -195,94 +179,6 @@ def _base_result(elapsed=0.0, text="", error=None, error_type=None, key_used="n/
         "response_time": elapsed,
         "key_used": key_used,
     }
-
-
-def call_gemini(model_id, prompt, params, api_key):
-    """Call Gemini with a single API key attempt."""
-    if not api_key:
-        return _base_result(error="Gemini API key is missing", error_type="config", key_used="missing")
-
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model_id}:generateContent?key={api_key}"
-    )
-
-    generation_config = {
-        "temperature": _clamp(_to_float(params.get("temperature"), 0.7), 0.0, 2.0),
-        "topP": _clamp(_to_float(params.get("top_p"), 1.0), 0.1, 1.0),
-        "maxOutputTokens": max(80, _to_int(params.get("max_tokens"), 500)),
-    }
-
-    presence_penalty = _to_float(params.get("presence_penalty"), 0.0)
-    frequency_penalty = _to_float(params.get("frequency_penalty"), 0.0)
-    if presence_penalty != 0.0:
-        generation_config["presencePenalty"] = _clamp(presence_penalty, -2.0, 2.0)
-    if frequency_penalty != 0.0:
-        generation_config["frequencyPenalty"] = _clamp(frequency_penalty, -2.0, 2.0)
-
-    payload = {
-        "system_instruction": {"parts": [{"text": FIGHT_SYSTEM}]},
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": generation_config,
-    }
-
-    started = time.time()
-    try:
-        response = requests.post(url, json=payload, timeout=45)
-    except Exception as exc:
-        elapsed = time.time() - started
-        return _base_result(
-            elapsed=elapsed,
-            error=str(exc),
-            error_type="network",
-            key_used=_masked_key(api_key),
-        )
-
-    elapsed = time.time() - started
-    key_used = _masked_key(api_key)
-
-    if response.status_code == 429:
-        return _base_result(
-            elapsed=elapsed,
-            error="429: rate limited",
-            error_type="rate_limit",
-            key_used=key_used,
-        )
-
-    if response.status_code != 200:
-        return _base_result(
-            elapsed=elapsed,
-            error=f"{response.status_code}: {response.text[:400]}",
-            error_type="api",
-            key_used=key_used,
-        )
-
-    data = response.json()
-    candidates = data.get("candidates", [])
-    if not candidates:
-        reason = data.get("promptFeedback", {}).get("blockReason", "no candidate returned")
-        return _base_result(
-            elapsed=elapsed,
-            error=f"Blocked: {reason}",
-            error_type="blocked",
-            key_used=key_used,
-        )
-
-    parts = candidates[0].get("content", {}).get("parts", [])
-    if not parts:
-        finish_reason = candidates[0].get("finishReason", "unknown")
-        return _base_result(
-            elapsed=elapsed,
-            error=f"Empty response (finish={finish_reason})",
-            error_type="empty",
-            key_used=key_used,
-        )
-
-    return _base_result(
-        elapsed=elapsed,
-        text=parts[0].get("text", ""),
-        key_used=key_used,
-    )
 
 
 def call_ollama(model_id, prompt, params):
@@ -337,39 +233,94 @@ def call_ollama(model_id, prompt, params):
     )
 
 
-def _call_gemini_with_failover(info, prompt, params):
-    if not lb.keys:
-        return _base_result(error="No Gemini API keys configured", error_type="config", key_used="missing")
+def call_groq(model_id, prompt, params):
+    """Call Groq's OpenAI-compatible chat completions API."""
+    if not GROQ_API_KEY:
+        return _base_result(error="Groq API key is missing", error_type="config", key_used="missing")
 
-    attempts = max(1, min(len(lb.keys), 4))
+    url = f"{GROQ_BASE_URL}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    candidate_models = []
+    for candidate in [model_id, GROQ_FALLBACK_MODEL]:
+        candidate = str(candidate or "").strip()
+        if candidate and candidate not in candidate_models:
+            candidate_models.append(candidate)
+
     last_result = None
+    for candidate_model in candidate_models:
+        payload = {
+            "model": candidate_model,
+            "temperature": _clamp(_to_float(params.get("temperature"), 0.7), 0.0, 2.0),
+            "top_p": _clamp(_to_float(params.get("top_p"), 1.0), 0.1, 1.0),
+            "max_tokens": max(80, _to_int(params.get("max_tokens"), 500)),
+            "presence_penalty": _clamp(_to_float(params.get("presence_penalty"), 0.0), -2.0, 2.0),
+            "frequency_penalty": _clamp(_to_float(params.get("frequency_penalty"), 0.0), -2.0, 2.0),
+            "messages": [
+                {"role": "system", "content": FIGHT_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+        }
 
-    for attempt in range(attempts):
-        preferred_index = info.get("api_key_index", 0) if attempt == 0 else None
-        api_key = lb.acquire_key(preferred_index=preferred_index)
-        if not api_key:
-            break
+        for attempt in range(GROQ_RETRY_ATTEMPTS):
+            started = time.time()
+            try:
+                response = requests.post(url, json=payload, headers=headers, timeout=GROQ_TIMEOUT)
+            except Exception as exc:
+                elapsed = time.time() - started
+                last_result = _base_result(
+                    elapsed=elapsed,
+                    error=str(exc),
+                    error_type="network",
+                    key_used=f"groq:{candidate_model}",
+                )
+                break
 
-        try:
-            result = call_gemini(info["model_id"], prompt, params, api_key)
-            last_result = result
+            elapsed = time.time() - started
+            if response.status_code == 429:
+                last_result = _base_result(
+                    elapsed=elapsed,
+                    error=f"429: rate limited on {candidate_model}",
+                    error_type="rate_limit",
+                    key_used=f"groq:{candidate_model}",
+                )
+                if attempt + 1 < GROQ_RETRY_ATTEMPTS:
+                    time.sleep(GROQ_RETRY_BASE_DELAY * (attempt + 1))
+                    continue
+                break
 
-            if result["error_type"] == "rate_limit":
-                lb.report_rate_limit(api_key)
-                continue
+            if response.status_code != 200:
+                return _base_result(
+                    elapsed=elapsed,
+                    error=f"{response.status_code}: {response.text[:400]}",
+                    error_type="api",
+                    key_used=f"groq:{candidate_model}",
+                )
 
-            if result["error_type"]:
-                lb.report_error(api_key)
-            else:
-                lb.report_success(api_key, result["response_time"])
-            return result
-        finally:
-            lb.release_key(api_key)
+            data = response.json()
+            choices = data.get("choices", [])
+            if not choices:
+                return _base_result(
+                    elapsed=elapsed,
+                    error="Empty response from Groq",
+                    error_type="empty",
+                    key_used=f"groq:{candidate_model}",
+                )
 
-    if last_result:
-        return last_result
+            message = choices[0].get("message", {})
+            return _base_result(
+                elapsed=elapsed,
+                text=message.get("content", ""),
+                key_used=f"groq:{candidate_model}",
+            )
 
-    return _base_result(error="All Gemini keys are unavailable", error_type="config", key_used="missing")
+    return last_result or _base_result(
+        error="Groq request failed",
+        error_type="api",
+        key_used="groq",
+    )
 
 
 def call_model(fighter_id, prompt, sabotage_params):
@@ -379,13 +330,13 @@ def call_model(fighter_id, prompt, sabotage_params):
         return _base_result(error=f"Unknown fighter: {fighter_id}", error_type="config", key_used="n/a")
 
     params = {**BASE_PARAMS, **(sabotage_params or {})}
-    provider = info.get("provider", "gemini").lower()
-
-    if provider == "gemini":
-        return _call_gemini_with_failover(info, prompt, params)
+    provider = info.get("provider", "ollama").lower()
 
     if provider == "ollama":
         return call_ollama(info["model_id"], prompt, params)
+
+    if provider == "groq":
+        return call_groq(info["model_id"], prompt, params)
 
     return _base_result(
         error=f"Unsupported provider: {provider}",
