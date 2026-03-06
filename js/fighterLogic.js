@@ -6,7 +6,7 @@
 // Fighter state management
 const fighterStates = {
     player1: {
-        x: 150,
+        x: 80,
         y: 0,
         health: 100,
         isBlocking: false,
@@ -15,7 +15,7 @@ const fighterStates = {
         canMove: true
     },
     player2: {
-        x: 450,
+        x: 80,
         y: 0,
         health: 100,
         isBlocking: false,
@@ -217,13 +217,19 @@ function duck(player, isDucking) {
  */
 function checkHit(attacker) {
     const defender = attacker === 1 ? 2 : 1;
-    const attackerState = fighterStates[`player${attacker}`];
     const defenderState = fighterStates[`player${defender}`];
 
-    // Simple distance check
-    const distance = Math.abs(attackerState.x - defenderState.x);
+    // Use actual DOM positions so both fighters share the same coordinate space
+    const attackerEl = document.getElementById(`fighter${attacker}-container`);
+    const defenderEl = document.getElementById(`fighter${defender}-container`);
 
-    if (distance < 100 && !defenderState.isDucking) {
+    if (!attackerEl || !defenderEl) return;
+
+    const aRect = attackerEl.getBoundingClientRect();
+    const dRect = defenderEl.getBoundingClientRect();
+    const visualGap = Math.abs(aRect.left - dRect.left);
+
+    if (visualGap < 150 && !defenderState.isDucking) {
         let damage = PUNCH_DAMAGE;
 
         if (defenderState.isBlocking) {
@@ -309,8 +315,8 @@ function endFight(winner) {
  * Reset fighter states for a new fight
  */
 function resetFight() {
-    fighterStates.player1 = { x: 150, y: 0, health: 100, isBlocking: false, isPunching: false, isDucking: false, canMove: true };
-    fighterStates.player2 = { x: 450, y: 0, health: 100, isBlocking: false, isPunching: false, isDucking: false, canMove: true };
+    fighterStates.player1 = { x: 80, y: 0, health: 100, isBlocking: false, isPunching: false, isDucking: false, canMove: true };
+    fighterStates.player2 = { x: 80, y: 0, health: 100, isBlocking: false, isPunching: false, isDucking: false, canMove: true };
 
     updateHealthBar(1);
     updateHealthBar(2);

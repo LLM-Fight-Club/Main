@@ -71,8 +71,9 @@ def on_start_fight(data):
     sid = request.sid
     p1 = str(data.get("p1", "1"))
     p2 = str(data.get("p2", "2"))
+    topic = str(data.get("topic", "")).strip()
 
-    fight = FightManager(p1, p2)
+    fight = FightManager(p1, p2, topic=topic)
     active_fights[sid] = {"fight": fight, "running": True}
 
     print(

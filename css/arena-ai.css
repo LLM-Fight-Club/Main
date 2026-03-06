@@ -397,11 +397,11 @@ body {
 }
 
 #fighter1-wrapper {
-    left: 25%;
+    left: calc(50% - 160px);
 }
 
 #fighter2-wrapper {
-    right: 25%;
+    left: calc(50% + 60px);
 }
 
 .round-indicator {
