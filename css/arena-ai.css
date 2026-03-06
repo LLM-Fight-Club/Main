@@ -111,7 +111,8 @@ body {
 
 .main-layout {
     display: flex;
-    min-height: calc(100vh - 196px);
+    height: calc(100vh - 100px); /* Adjusted to prevent overflow */
+    overflow: hidden;
 }
 
 .cot-panel {
@@ -120,6 +121,7 @@ body {
     flex-direction: column;
     background: linear-gradient(180deg, rgba(11, 15, 28, 0.95), rgba(7, 9, 17, 0.98));
     border-right: 1px solid rgba(255, 255, 255, 0.08);
+    height: 100%;
 }
 
 .cot-panel.right {
@@ -311,7 +313,7 @@ body {
     position: relative;
     flex: 1;
     overflow: hidden;
-    min-height: 440px;
+    height: 100%;
     background: #0a1020;
 }
 

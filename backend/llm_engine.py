@@ -82,6 +82,13 @@ DEFAULT_MODEL_SLOTS = {
         "description": "Experimental build. Cheap, twitchy, and volatile.",
         "color": "#f59e0b",
     },
+    "5": {
+        "name": "Ollama Llama 3.2",
+        "model_id": "llama3.2",
+        "provider": "ollama",
+        "description": "Local powerhouse. No API keys, no limits.",
+        "color": "#ffffff",
+    },
 }
 
 GEMINI_API_KEYS = [
