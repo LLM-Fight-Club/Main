@@ -158,17 +158,19 @@ BASE_PARAMS = {
     "top_p": 1.0,
     "presence_penalty": 0.0,
     "frequency_penalty": 0.0,
-    "max_tokens": 100,
+    "max_tokens": 220,
 }
 
 FIGHT_SYSTEM = (
-    "You are an LLM boxer in a live benchmark arena. Decide fast, use minimal logic, and do not overthink. Keep outputs extremely short and decisive. "
-    "Return only valid JSON with these keys: "
-    '"debate" (one sharp sentence on the topic), '
-    '"thinking" (one short tactical sentence), '
+    "You are an LLM boxer in a live benchmark arena. "
+    "Return ONLY a single JSON object — no prose, no markdown, no explanation before or after. "
+    "Keys: "
+    '"debate" (under 8 words on the topic), '
+    '"thinking" (under 8 words tactical), '
     '"move" (exactly one of PUNCH, KICK, DEFEND, DUCK, MOVE_FORWARD, MOVE_BACKWARD), '
-    '"confidence" (number between 0 and 1), '
-    '"prediction" (short guess about the opponent\'s next move).'
+    '"confidence" (0.0-1.0), '
+    '"prediction" (opponent next move, one word). '
+    "Example: {\"debate\":\"Speed beats strength always.\",\"thinking\":\"He last punched, duck it.\",\"move\":\"DUCK\",\"confidence\":0.75,\"prediction\":\"PUNCH\"}"
 )
 
 
@@ -282,9 +284,10 @@ def call_groq(model_id, prompt, params, fighter_key: str = ""):
             "model": candidate_model,
             "temperature": _clamp(_to_float(params.get("temperature"), 0.7), 0.0, 2.0),
             "top_p": _clamp(_to_float(params.get("top_p"), 1.0), 0.1, 1.0),
-            "max_tokens": max(80, _to_int(params.get("max_tokens"), 500)),
+            "max_tokens": max(180, _to_int(params.get("max_tokens"), 220)),
             "presence_penalty": _clamp(_to_float(params.get("presence_penalty"), 0.0), -2.0, 2.0),
             "frequency_penalty": _clamp(_to_float(params.get("frequency_penalty"), 0.0), -2.0, 2.0),
+            "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": FIGHT_SYSTEM},
                 {"role": "user", "content": prompt},

@@ -68,7 +68,7 @@ PARAM_LIMITS = {
     "top_p": (0.1, 1.0),
     "presence_penalty": (0.0, 2.0),
     "frequency_penalty": (0.0, 2.0),
-    "max_tokens": (80, BASE_PARAMS["max_tokens"]),
+    "max_tokens": (160, BASE_PARAMS["max_tokens"]),
 }
 
 CLOSE = "CLOSE"
@@ -469,10 +469,10 @@ Debate topic:
 {self.topic if self.topic else 'No topic. Fight on instinct.'}
 
 Output requirements:
-- debate: exactly 1 sharp sentence
-- thinking: exactly 1 short tactical sentence
-- prediction: short exact move guess
-- keep all text minimal and fast
+- debate: 1 sentence, max 8 words
+- thinking: 1 sentence, max 8 words
+- prediction: single move word
+- CRITICAL: entire JSON must be under 200 tokens, keep all values very short
 
 Return only JSON:
 {{"debate":"One sentence.","thinking":"One short tactical sentence.","move":"PUNCH","confidence":0.82,"prediction":"DEFEND"}}"""
