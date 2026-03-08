@@ -308,6 +308,137 @@
                 transform: translate(-50%, -50%) scale(1.15);
             }
         }
+
+        /* Name Input Popup Modal */
+        .name-popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9000;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .name-popup-box {
+            background: linear-gradient(180deg, #1a1a3e 0%, #0a0a1e 100%);
+            border: 3px solid #4af;
+            box-shadow: 0 0 30px rgba(68, 170, 255, 0.5), inset 0 0 20px rgba(68, 170, 255, 0.1);
+            padding: 25px 35px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .name-popup-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 14px;
+            color: #ffcc00;
+            text-shadow: 2px 2px 0 #000;
+            margin-bottom: 20px;
+        }
+
+        .name-popup-character {
+            margin-bottom: 15px;
+        }
+
+        .name-popup-character img {
+            width: 80px;
+            height: 80px;
+            image-rendering: pixelated;
+            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.5));
+        }
+
+        .name-popup-model {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 8px;
+            color: #aaa;
+            margin-top: 8px;
+        }
+
+        .name-popup-input {
+            width: 100%;
+            padding: 12px 15px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 12px;
+            background: #111;
+            border: 2px solid #4af;
+            color: #fff;
+            text-align: center;
+            outline: none;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+
+        .name-popup-input:focus {
+            border-color: #ffcc00;
+            box-shadow: 0 0 10px rgba(255, 204, 0, 0.5);
+        }
+
+        .name-popup-input::placeholder {
+            color: #666;
+        }
+
+        .name-popup-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .name-popup-btn {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 2px solid;
+            transition: all 0.15s ease;
+        }
+
+        .name-popup-btn.confirm {
+            background: linear-gradient(180deg, #33cc33 0%, #22aa22 100%);
+            border-color: #005500;
+            color: #fff;
+            text-shadow: 1px 1px 0 #000;
+        }
+
+        .name-popup-btn.confirm:hover {
+            background: linear-gradient(180deg, #44dd44 0%, #33cc33 100%);
+            transform: scale(1.05);
+        }
+
+        .name-popup-btn.cancel {
+            background: linear-gradient(180deg, #666 0%, #444 100%);
+            border-color: #333;
+            color: #fff;
+            text-shadow: 1px 1px 0 #000;
+        }
+
+        .name-popup-btn.cancel:hover {
+            background: linear-gradient(180deg, #777 0%, #555 100%);
+            transform: scale(1.05);
+        }
+
+        .player-custom-name {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px;
+            color: #4af;
+            margin-top: 4px;
+            text-shadow: 1px 1px 0 #000;
+        }
     </style>
 </head>
 
@@ -334,7 +465,7 @@
             ? window.location.origin
             : 'http://localhost:5000';
 
-        function PlayerButton({ fighterId, model, selected, disabled, onClick }) {
+        function PlayerButton({ fighterId, model, selected, disabled, onClick, customName }) {
             const className = `player-btn ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`;
             const skinId = model.skin_id || fighterId;
             return React.createElement('div', { style: { textAlign: 'center', maxWidth: '90px' } }, [
@@ -349,6 +480,10 @@
                         alt: model.name
                     })
                 ),
+                customName && React.createElement('div', {
+                    key: `custom-${fighterId}`,
+                    className: 'player-custom-name'
+                }, customName),
                 React.createElement('div', {
                     key: `label-${fighterId}`,
                     style: {
@@ -373,7 +508,7 @@
             ]);
         }
 
-        function PlayerSide({ title, id, players, models, selectedPlayer, disabledPlayer, onSelect }) {
+        function PlayerSide({ title, id, players, models, selectedPlayer, disabledPlayer, onSelect, customName }) {
             return React.createElement('div', { className: 'player-side', id }, [
                 React.createElement('h3', { key: 'title' }, title),
                 React.createElement('div', { className: 'player-list-scroll', key: 'list' },
@@ -384,17 +519,81 @@
                             model: models[fighterId],
                             selected: selectedPlayer === fighterId,
                             disabled: disabledPlayer === fighterId,
-                            onClick: onSelect
+                            onClick: onSelect,
+                            customName: selectedPlayer === fighterId ? customName : null
                         })
                     )
                 )
             ]);
         }
 
+        function NamePopup({ side, model, skinId, onConfirm, onCancel }) {
+            const [name, setName] = useState('');
+            const inputRef = useRef(null);
+
+            useEffect(() => {
+                if (inputRef.current) {
+                    inputRef.current.focus();
+                }
+            }, []);
+
+            const handleKeyDown = (e) => {
+                if (e.key === 'Enter' && name.trim()) {
+                    onConfirm(name.trim());
+                } else if (e.key === 'Escape') {
+                    onCancel();
+                }
+            };
+
+            return React.createElement('div', { className: 'name-popup-overlay' },
+                React.createElement('div', { className: 'name-popup-box' }, [
+                    React.createElement('div', { key: 'title', className: 'name-popup-title' },
+                        `ENTER ${side === 'left' ? 'PLAYER 1' : 'PLAYER 2'} NAME`
+                    ),
+                    React.createElement('div', { key: 'char', className: 'name-popup-character' }, [
+                        React.createElement('img', {
+                            key: 'img',
+                            src: `assets/images/characters/player${skinId}.png`,
+                            alt: model.name
+                        }),
+                        React.createElement('div', { key: 'model', className: 'name-popup-model' }, model.name)
+                    ]),
+                    React.createElement('input', {
+                        key: 'input',
+                        ref: inputRef,
+                        type: 'text',
+                        className: 'name-popup-input',
+                        placeholder: 'Your name...',
+                        value: name,
+                        onChange: (e) => setName(e.target.value.slice(0, 20)),
+                        onKeyDown: handleKeyDown,
+                        maxLength: 20
+                    }),
+                    React.createElement('div', { key: 'buttons', className: 'name-popup-buttons' }, [
+                        React.createElement('button', {
+                            key: 'cancel',
+                            className: 'name-popup-btn cancel',
+                            onClick: onCancel
+                        }, 'CANCEL'),
+                        React.createElement('button', {
+                            key: 'confirm',
+                            className: 'name-popup-btn confirm',
+                            onClick: () => name.trim() && onConfirm(name.trim()),
+                            disabled: !name.trim()
+                        }, 'CONFIRM')
+                    ])
+                ])
+            );
+        }
+
         function SelectionApp() {
             const [models, setModels] = useState(FALLBACK_MODELS);
             const [leftSelected, setLeftSelected] = useState(null);
             const [rightSelected, setRightSelected] = useState(null);
+            const [leftName, setLeftName] = useState('');
+            const [rightName, setRightName] = useState('');
+            const [popupSide, setPopupSide] = useState(null);
+            const [pendingSelection, setPendingSelection] = useState(null);
             const [isTransitioning, setIsTransitioning] = useState(false);
             const clickSoundRef = useRef(null);
             const bellSoundRef = useRef(null);
@@ -428,16 +627,36 @@
 
             const handleLeftSelect = useCallback((fighterId) => {
                 playClick();
-                setLeftSelected(fighterId);
-                if (rightSelected === fighterId) {
-                    setRightSelected(null);
-                }
-            }, [playClick, rightSelected]);
+                setPendingSelection(fighterId);
+                setPopupSide('left');
+            }, [playClick]);
 
             const handleRightSelect = useCallback((fighterId) => {
                 playClick();
-                setRightSelected(fighterId);
+                setPendingSelection(fighterId);
+                setPopupSide('right');
             }, [playClick]);
+
+            const handleNameConfirm = useCallback((name) => {
+                if (popupSide === 'left') {
+                    setLeftSelected(pendingSelection);
+                    setLeftName(name);
+                    if (rightSelected === pendingSelection) {
+                        setRightSelected(null);
+                        setRightName('');
+                    }
+                } else {
+                    setRightSelected(pendingSelection);
+                    setRightName(name);
+                }
+                setPopupSide(null);
+                setPendingSelection(null);
+            }, [popupSide, pendingSelection, rightSelected]);
+
+            const handleNameCancel = useCallback(() => {
+                setPopupSide(null);
+                setPendingSelection(null);
+            }, []);
 
             const handleStartFight = useCallback(() => {
                 if (leftSelected && rightSelected) {
@@ -450,13 +669,27 @@
             }, [leftSelected, rightSelected, playClick]);
 
             const handleTransitionComplete = useCallback(() => {
-                window.location.href = `arena-ai.html?p1=${leftSelected}&p2=${rightSelected}`;
-            }, [leftSelected, rightSelected]);
+                const params = new URLSearchParams({
+                    p1: leftSelected,
+                    p2: rightSelected,
+                    p1name: leftName,
+                    p2name: rightName
+                });
+                window.location.href = `arena-ai.html?${params.toString()}`;
+            }, [leftSelected, rightSelected, leftName, rightName]);
 
             const players = Object.keys(models).sort((a, b) => Number(a) - Number(b));
             const isDoneActive = Boolean(leftSelected && rightSelected);
 
             return React.createElement(React.Fragment, null, [
+                popupSide && pendingSelection && React.createElement(NamePopup, {
+                    key: 'popup',
+                    side: popupSide,
+                    model: models[pendingSelection],
+                    skinId: models[pendingSelection].skin_id || pendingSelection,
+                    onConfirm: handleNameConfirm,
+                    onCancel: handleNameCancel
+                }),
                 React.createElement('div', { key: 'header', className: 'choose-header' },
                     React.createElement('img', {
                         src: 'assets/images/landing/choose.png',
@@ -472,7 +705,8 @@
                         models,
                         selectedPlayer: leftSelected,
                         disabledPlayer: null,
-                        onSelect: handleLeftSelect
+                        onSelect: handleLeftSelect,
+                        customName: leftName
                     }),
                     React.createElement('div', { key: 'vs', className: 'vs-text' }, 'VS'),
                     React.createElement(PlayerSide, {
@@ -483,7 +717,8 @@
                         models,
                         selectedPlayer: rightSelected,
                         disabledPlayer: leftSelected,
-                        onSelect: handleRightSelect
+                        onSelect: handleRightSelect,
+                        customName: rightName
                     })
                 ]),
                 React.createElement('button', {
