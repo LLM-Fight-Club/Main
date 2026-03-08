@@ -102,6 +102,17 @@ const p1CrowdNote = document.getElementById('p1-crowd-note');
 const p2CrowdNote = document.getElementById('p2-crowd-note');
 let liveCommentaryEnabled = false;
 let commentaryAudio = null;
+let commentaryNextSrc = null; // single pending slot — newer clips overwrite older ones
+
+function _onCommentaryEnded() {
+    if (commentaryNextSrc) {
+        const src = commentaryNextSrc;
+        commentaryNextSrc = null;
+        commentaryAudio.src = src;
+        commentaryAudio.currentTime = 0;
+        commentaryAudio.play().catch(() => { });
+    }
+}
 
 function playSound(id) {
     const sound = document.getElementById(id);
@@ -256,23 +267,20 @@ function updateLiveCommentary(entry) {
         const src = `data:${mime};base64,${entry.audio_base64}`;
 
         if (!commentaryAudio) {
-            // First clip ever — just play it immediately
+            // First clip ever — create the element with a persistent ended handler
             commentaryAudio = new Audio(src);
             commentaryAudio.preload = 'auto';
+            commentaryAudio.addEventListener('ended', _onCommentaryEnded);
             commentaryAudio.play().catch(() => { });
         } else if (commentaryAudio.paused || commentaryAudio.ended) {
-            // Previous clip done — play the new one right away
+            // Previous clip done — play immediately
+            commentaryNextSrc = null;
             commentaryAudio.src = src;
             commentaryAudio.currentTime = 0;
             commentaryAudio.play().catch(() => { });
         } else {
-            // Still talking — let it finish, then fade into new clip
-            const queuedAudio = new Audio(src);
-            queuedAudio.preload = 'auto';
-            commentaryAudio.addEventListener('ended', () => {
-                commentaryAudio = queuedAudio;
-                commentaryAudio.play().catch(() => { });
-            }, { once: true });
+            // Still talking — overwrite the single pending slot (drops any older queued clip)
+            commentaryNextSrc = src;
         }
     }
 }
