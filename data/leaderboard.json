@@ -2,19 +2,19 @@
   "models": [
     {
       "name": "groq",
-      "wins": 5,
+      "wins": 4,
       "losses": 2,
-      "avg_score": 25.96,
-      "prediction_accuracy": 26.63,
-      "reasoning_quality": 2.05
+      "avg_score": 28.27,
+      "prediction_accuracy": 41.62,
+      "reasoning_quality": 2.07
     },
     {
       "name": "ollama",
-      "wins": 0,
+      "wins": 1,
       "losses": 3,
-      "avg_score": 16.82,
-      "prediction_accuracy": 22.23,
-      "reasoning_quality": 1.89
+      "avg_score": 19.39,
+      "prediction_accuracy": 42.75,
+      "reasoning_quality": 1.91
     }
   ]
 }

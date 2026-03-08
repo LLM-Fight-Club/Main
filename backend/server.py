@@ -28,6 +28,8 @@ load_dotenv()
 app = Flask(__name__, static_folder="..", static_url_path="")
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+FIGHT_START_DELAY = max(0.0, float(os.getenv("FIGHT_START_DELAY", "0.6") or "0.6"))
+TURN_RESULT_DELAY = max(0.0, float(os.getenv("TURN_RESULT_DELAY", "0.8") or "0.8"))
 
 active_fights = {}
 
@@ -114,8 +116,13 @@ def on_start_fight(data):
     )
     emit("fight_started", fight.get_initial_state())
 
+    def emit_live_commentary(turn_payload):
+        commentary = fight.generate_turn_commentary(turn_payload)
+        if commentary and active_fights.get(sid, {}).get("running", False):
+            socketio.emit("live_commentary", commentary, to=sid)
+
     def loop():
-        time.sleep(2.5)
+        time.sleep(FIGHT_START_DELAY)
 
         while active_fights.get(sid, {}).get("running", False):
             current = active_fights[sid]["fight"]
@@ -128,6 +135,14 @@ def on_start_fight(data):
                 break
 
             socketio.emit("turn_result", turn_data, to=sid)
+
+            if turn_data.get("live_commentary_enabled"):
+                commentary_thread = threading.Thread(
+                    target=emit_live_commentary,
+                    args=(turn_data,),
+                    daemon=True,
+                )
+                commentary_thread.start()
 
             if turn_data["game_over"]:
                 socketio.emit(
@@ -144,7 +159,7 @@ def on_start_fight(data):
                 )
                 break
 
-            time.sleep(3)
+            time.sleep(TURN_RESULT_DELAY)
 
         if sid in active_fights:
             active_fights[sid]["running"] = False
@@ -200,6 +215,20 @@ def on_legacy_crowd_action(data):
     if not mapped_action:
         return
     on_sabotage_action({"player": data.get("player"), "action": mapped_action})
+
+
+@socketio.on("audience_cheer")
+def on_audience_cheer(data):
+    sid = request.sid
+    if sid not in active_fights:
+        return
+
+    fight = active_fights[sid]["fight"]
+    event = fight.register_audience_cheer(data.get("player"))
+    if not event:
+        return
+
+    socketio.emit("audience_update", event, to=sid)
 
 
 if __name__ == "__main__":

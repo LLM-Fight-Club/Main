@@ -46,48 +46,52 @@ def _to_float(value, default):
 
 DEFAULT_MODEL_SLOTS = {
     "1": {
-        "name": "Qwen 3.5",
-        "model_id": "qwen3.5:latest",
-        "provider": "ollama",
+        "name": "Llama 3.1 8B",
+        "model_id": "llama-3.1-8b-instant",
+        "provider": "groq",
         "skin_id": "1",
-        "description": "Ollama Cloud multimodal generalist with strong overall utility.",
+        "description": "Ultra-fast 8B Llama model on Groq — sub-second action decisions.",
         "color": "#ffffff",
     },
     "2": {
-        "name": "Groq Llama 3.3 70B",
-        "model_id": "llama-3.3-70b-versatile",
+        "name": "Gemma 2 9B",
+        "model_id": "gemma2-9b-it",
         "provider": "groq",
         "skin_id": "2",
-        "description": "Groq production model optimized for quality with solid reasoning range.",
+        "description": "Google Gemma 2 9B instruction model — sharp, fast Groq inference.",
         "color": "#f55036",
     },
     "3": {
-        "name": "GPT OSS 20B",
-        "model_id": "openai/gpt-oss-20b",
+        "name": "Llama 3.3 70B",
+        "model_id": "llama-3.3-70b-versatile",
         "provider": "groq",
         "skin_id": "3",
-        "description": "OpenAI open-weight 20B model hosted on Groq.",
+        "description": "Meta Llama 3.3 70B on Groq — powerful and still fast.",
         "color": "#6ef2ff",
     },
     "4": {
-        "name": "Groq Llama 3.1 8B",
-        "model_id": "llama-3.1-8b-instant",
+        "name": "GPT OSS 20B",
+        "model_id": "openai/gpt-oss-20b",
         "provider": "groq",
         "skin_id": "4",
-        "description": "Fast Groq production model tuned for low latency.",
+        "description": "Groq-hosted GPT OSS setup for fast action selection with short outputs.",
         "color": "#ffb347",
     },
 }
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
-OLLAMA_TIMEOUT = _to_int(os.getenv("OLLAMA_TIMEOUT"), 60)
+OLLAMA_TIMEOUT = _to_int(os.getenv("OLLAMA_TIMEOUT"), 10)
 GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
-GROQ_TIMEOUT = _to_int(os.getenv("GROQ_TIMEOUT"), 45)
-GROQ_RETRY_ATTEMPTS = max(1, _to_int(os.getenv("GROQ_RETRY_ATTEMPTS"), 2))
-GROQ_RETRY_BASE_DELAY = _to_float(os.getenv("GROQ_RETRY_BASE_DELAY"), 1.25)
+GROQ_TIMEOUT = _to_int(os.getenv("GROQ_TIMEOUT"), 8)
+GROQ_RETRY_ATTEMPTS = max(1, _to_int(os.getenv("GROQ_RETRY_ATTEMPTS"), 1))
+GROQ_RETRY_BASE_DELAY = _to_float(os.getenv("GROQ_RETRY_BASE_DELAY"), 0.35)
 GROQ_FALLBACK_MODEL = os.getenv("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant").strip()
+GROQ_RATE_LIMIT_COOLDOWN = _to_float(os.getenv("GROQ_RATE_LIMIT_COOLDOWN"), 8.0)
+
+# Per-fighter rate-limit cooldown tracking
+_groq_rate_limited_until: dict[str, float] = {}
 
 
 def _build_model_registry():
@@ -154,14 +158,14 @@ BASE_PARAMS = {
     "top_p": 1.0,
     "presence_penalty": 0.0,
     "frequency_penalty": 0.0,
-    "max_tokens": 500,
+    "max_tokens": 100,
 }
 
 FIGHT_SYSTEM = (
-    "You are an LLM boxer in a live benchmark arena. "
+    "You are an LLM boxer in a live benchmark arena. Decide fast, use minimal logic, and do not overthink. Keep outputs extremely short and decisive. "
     "Return only valid JSON with these keys: "
-    '"debate" (your argument on the current topic), '
-    '"thinking" (short tactical combat summary, 2-3 sentences max), '
+    '"debate" (one sharp sentence on the topic), '
+    '"thinking" (one short tactical sentence), '
     '"move" (exactly one of PUNCH, KICK, DEFEND, DUCK, MOVE_FORWARD, MOVE_BACKWARD), '
     '"confidence" (number between 0 and 1), '
     '"prediction" (short guess about the opponent\'s next move).'
@@ -234,10 +238,32 @@ def call_ollama(model_id, prompt, params):
     )
 
 
-def call_groq(model_id, prompt, params):
+def _is_groq_cooling(fighter_key: str) -> bool:
+    """Return True if this fighter key is in a Groq rate-limit cooldown."""
+    until = _groq_rate_limited_until.get(fighter_key, 0.0)
+    return time.time() < until
+
+
+def _set_groq_cooldown(fighter_key: str, retry_after: float | None = None) -> None:
+    """Set a cooldown for a fighter after hitting a 429."""
+    duration = retry_after if (retry_after and 0 < retry_after < 120) else GROQ_RATE_LIMIT_COOLDOWN
+    _groq_rate_limited_until[fighter_key] = time.time() + duration
+
+
+def call_groq(model_id, prompt, params, fighter_key: str = ""):
     """Call Groq's OpenAI-compatible chat completions API."""
     if not GROQ_API_KEY:
         return _base_result(error="Groq API key is missing", error_type="config", key_used="missing")
+
+    # Honour per-fighter cooldown — skip the network call entirely
+    if fighter_key and _is_groq_cooling(fighter_key):
+        until = _groq_rate_limited_until[fighter_key]
+        wait = max(0.0, until - time.time())
+        return _base_result(
+            error=f"429: rate limited on {model_id} (cooling {wait:.1f}s)",
+            error_type="rate_limit",
+            key_used=f"groq:{model_id}",
+        )
 
     url = f"{GROQ_BASE_URL}/chat/completions"
     headers = {
@@ -281,6 +307,13 @@ def call_groq(model_id, prompt, params):
 
             elapsed = time.time() - started
             if response.status_code == 429:
+                # Parse Retry-After header if provided
+                retry_after = None
+                try:
+                    retry_after = float(response.headers.get("Retry-After", 0) or 0)
+                except (ValueError, TypeError):
+                    pass
+                _set_groq_cooldown(fighter_key or model_id, retry_after)
                 last_result = _base_result(
                     elapsed=elapsed,
                     error=f"429: rate limited on {candidate_model}",
@@ -337,7 +370,7 @@ def call_model(fighter_id, prompt, sabotage_params):
         return call_ollama(info["model_id"], prompt, params)
 
     if provider == "groq":
-        return call_groq(info["model_id"], prompt, params)
+        return call_groq(info["model_id"], prompt, params, fighter_key=str(fighter_id))
 
     return _base_result(
         error=f"Unsupported provider: {provider}",
@@ -367,6 +400,19 @@ def _extract_thinking(data):
     if debate:
         return f"[DEBATE] {debate} [TACTICS] {strat}"[:1000]
     return strat[:500]
+
+
+def _extract_tactics(data):
+    return (
+        str(data.get("thinking", "")).strip()
+        or str(data.get("reasoning", "")).strip()
+        or str(data.get("analysis", "")).strip()
+        or "No tactical reasoning."
+    )[:500]
+
+
+def _extract_debate(data):
+    return str(data.get("debate", "")).strip()[:1000]
 
 
 def _normalize_move(move):
@@ -424,6 +470,8 @@ def parse_llm_response(text):
 
             return {
                 "thinking": final_think,
+                "tactics": ostrat[:500],
+                "debate": odebate[:1000],
                 "move": move,
                 "confidence": float(confidence_match.group(1)) if confidence_match else 0.5,
                 "prediction": prediction_match.group(1) if prediction_match else "Unknown",
@@ -438,6 +486,8 @@ def _from_data(data, valid_moves, raw):
         move = "DEFEND"
     return {
         "thinking": _extract_thinking(data),
+        "tactics": _extract_tactics(data),
+        "debate": _extract_debate(data),
         "move": move,
         "confidence": _clamp(_to_float(data.get("confidence"), 0.5), 0.0, 1.0),
         "prediction": str(data.get("prediction", "Unknown"))[:200],
@@ -453,6 +503,8 @@ def _fallback(clean, valid_moves, raw):
             if normalized in valid_moves:
                 return {
                     "thinking": clean[:300],
+                    "tactics": clean[:300],
+                    "debate": "",
                     "move": normalized,
                     "confidence": 0.3,
                     "prediction": "Unknown",
@@ -464,6 +516,8 @@ def _fallback(clean, valid_moves, raw):
 def _default(message):
     return {
         "thinking": message,
+        "tactics": message,
+        "debate": "",
         "move": "DEFEND",
         "confidence": 0.1,
         "prediction": "Unknown",
