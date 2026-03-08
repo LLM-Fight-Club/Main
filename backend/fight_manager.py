@@ -13,10 +13,32 @@ import threading
 
 try:
     from .commentary_engine import commentary_available, generate_live_commentary
-    from .llm_engine import BASE_PARAMS, GROQ_TIMEOUT, MODELS, OLLAMA_TIMEOUT, call_model, parse_llm_response
+    from .llm_engine import (
+        BASE_PARAMS,
+        GROQ_MAX_RETRY_WAIT,
+        GROQ_RETRY_ATTEMPTS,
+        GROQ_TIMEOUT,
+        MODELS,
+        OLLAMA_RETRY_ATTEMPTS,
+        OLLAMA_RETRY_BASE_DELAY,
+        OLLAMA_TIMEOUT,
+        call_model,
+        parse_llm_response,
+    )
 except ImportError:
     from commentary_engine import commentary_available, generate_live_commentary
-    from llm_engine import BASE_PARAMS, GROQ_TIMEOUT, MODELS, OLLAMA_TIMEOUT, call_model, parse_llm_response
+    from llm_engine import (
+        BASE_PARAMS,
+        GROQ_MAX_RETRY_WAIT,
+        GROQ_RETRY_ATTEMPTS,
+        GROQ_TIMEOUT,
+        MODELS,
+        OLLAMA_RETRY_ATTEMPTS,
+        OLLAMA_RETRY_BASE_DELAY,
+        OLLAMA_TIMEOUT,
+        call_model,
+        parse_llm_response,
+    )
 
 
 DAMAGE = {
@@ -86,6 +108,7 @@ class Fighter:
         info = MODELS.get(str(fighter_id), {})
         self.fighter_id = str(fighter_id)
         self.name = info.get("name", f"Fighter {fighter_id}")
+        self.display_name = self.name  # can be overridden by custom user name
         self.model_id = info.get("model_id", "")
         self.provider = info.get("provider", "")
         self.description = info.get("description", "")
@@ -263,47 +286,6 @@ class FightManager:
         gap_after_close = max(0, abs(fighter.x - opponent.x) - 249)
         return int(math.ceil(gap_after_close / 100)) if gap_after_close else 0
 
-    def _fallback_move(self, fighter, opponent):
-        distance = self._get_distance()
-        opponent_last_move = opponent.moves_made[-1] if opponent.moves_made else ""
-
-        if distance == FAR:
-            return {
-                "thinking": "Out of range. Closing distance is mandatory before any strike can land.",
-                "move": "MOVE_FORWARD",
-                "confidence": 0.45,
-                "prediction": opponent_last_move or "MOVE_FORWARD",
-                "raw": "",
-            }
-
-        if opponent_last_move == "DEFEND":
-            return {
-                "thinking": "Opponent has been shelling up. Kick is the highest-value close-range check.",
-                "move": "KICK",
-                "confidence": 0.4,
-                "prediction": "DEFEND",
-                "raw": "",
-            }
-
-        if opponent_last_move == "PUNCH":
-            return {
-                "thinking": "Opponent just showed punch pressure. Duck is the safest reactive fallback.",
-                "move": "DUCK",
-                "confidence": 0.35,
-                "prediction": "PUNCH",
-                "raw": "",
-            }
-
-        return {
-            "thinking": "In range with no strong read. Defaulting to a basic punch instead of freezing.",
-            "tactics": "In range with no strong read. Defaulting to a basic punch instead of freezing.",
-            "debate": "",
-            "move": "PUNCH",
-            "confidence": 0.35,
-            "prediction": opponent_last_move or "DEFEND",
-            "raw": "",
-        }
-
     def _clip_text(self, value, limit=140):
         text = " ".join(str(value or "").split())
         if len(text) <= limit:
@@ -313,21 +295,45 @@ class FightManager:
     def _prepare_decision(self, fighter, opponent, result):
         raw_text = result.get("text", "")
         parsed = parse_llm_response(raw_text)
-        used_fallback = bool(result.get("error") or not raw_text.strip())
-        if used_fallback:
-            parsed = self._fallback_move(fighter, opponent)
-
+        decision_error = result.get("error") or parsed.get("parse_error")
         parsed["debate"] = str(parsed.get("debate", "")).strip()
         parsed["tactics"] = str(parsed.get("tactics") or parsed.get("thinking", "")).strip()
-        parsed["decision_source"] = "fallback" if used_fallback else "model"
-        parsed["is_fallback"] = used_fallback
-        parsed["fallback_reason"] = result.get("error") or ("Empty model response" if not raw_text.strip() else "")
-        parsed["model_error"] = result.get("error")
-        parsed["display_thinking"] = (
-            f"Autopilot fallback engaged. {parsed['tactics']}" if used_fallback else parsed.get("thinking", "")
-        )
-        parsed["display_debate"] = parsed["debate"] if not used_fallback else ""
+        parsed["valid"] = bool(parsed.get("valid")) and not decision_error
+        parsed["decision_source"] = "model" if parsed["valid"] else "error"
+        parsed["error_type"] = result.get("error_type") or ("parse_error" if not parsed["valid"] else None)
+        parsed["model_error"] = decision_error
+        parsed["display_thinking"] = parsed.get("thinking", "")
+        parsed["display_debate"] = parsed["debate"] if parsed["valid"] else ""
         return parsed
+
+    def _log_invalid_decision_events(self, parsed1, parsed2):
+        events = []
+        if not parsed1.get("valid"):
+            message = self._clip_text(parsed1.get("model_error") or parsed1.get("thinking") or "Invalid output", 180)
+            events.append(
+                self._log_event(
+                    f"{self.fighter1.name} failed to produce a valid move: {message}.",
+                    event_type="model_error",
+                    actor=self.fighter1.name,
+                    target=self.fighter2.name,
+                )
+            )
+        if not parsed2.get("valid"):
+            message = self._clip_text(parsed2.get("model_error") or parsed2.get("thinking") or "Invalid output", 180)
+            events.append(
+                self._log_event(
+                    f"{self.fighter2.name} failed to produce a valid move: {message}.",
+                    event_type="model_error",
+                    actor=self.fighter2.name,
+                    target=self.fighter1.name,
+                )
+            )
+        return events
+
+    def _turn_join_timeout(self):
+        groq_retry_budget = GROQ_RETRY_ATTEMPTS * GROQ_MAX_RETRY_WAIT
+        ollama_retry_budget = (OLLAMA_RETRY_ATTEMPTS - 1) * OLLAMA_RETRY_BASE_DELAY
+        return max(OLLAMA_TIMEOUT + ollama_retry_budget, GROQ_TIMEOUT + groq_retry_budget) + TURN_JOIN_BUFFER
 
     def register_audience_cheer(self, player_key):
         fighter = self.fighter1 if player_key == "p1" else self.fighter2 if player_key == "p2" else None
@@ -377,18 +383,28 @@ class FightManager:
         facing = self._facing(fighter)
         opponent_facing = self._facing(opponent)
         moves_to_close = self._moves_needed_to_close(fighter, opponent)
+
+        is_p1 = fighter == self.fighter1
+        move_key = "p1_move" if is_p1 else "p2_move"
+        opp_move_key = "p2_move" if is_p1 else "p1_move"
+        debate_key = "p1_debate" if is_p1 else "p2_debate"
+
         history_lines = []
         for item in self.history[-2:]:
-            if fighter == self.fighter1:
-                history_lines.append(
-                    f"Turn {item['turn']}: you={item['p1_move']} opponent={item['p2_move']}"
-                )
-            else:
-                history_lines.append(
-                    f"Turn {item['turn']}: you={item['p2_move']} opponent={item['p1_move']}"
-                )
-
+            history_lines.append(
+                f"Turn {item['turn']}: you={item[move_key]} opponent={item[opp_move_key]}"
+            )
         history_text = " | ".join(history_lines) if history_lines else "No prior turns."
+
+        past_debates = [
+            item[debate_key]
+            for item in self.history[-5:]
+            if item.get(debate_key)
+        ]
+        past_debates_text = (
+            " | ".join(f'"{d}"' for d in past_debates)
+            if past_debates else "None yet."
+        )
 
         strategy_guidance = ""
         if any("FAR range and whiffed" in r for r in fighter.last_reward_reasons):
@@ -432,7 +448,7 @@ class FightManager:
                 'Respond only with JSON: {"thinking":"...","move":"DEFEND","confidence":0.1,"prediction":"..."}'
             )
 
-        return f"""You are {fighter.name}. Decide one move fast, use minimal logic, and return only JSON.
+        return f"""You are {fighter.name}. Return only a JSON object.
 
 Match:
 - Turn {self.turn + 1}/{self.max_turns}
@@ -463,18 +479,23 @@ Rules:
 - DUCK dodges PUNCH only.
 - MOVE_BACKWARD is usually bad.
 - Prefer PUNCH/KICK in CLOSE unless you have a specific read.
-- React quickly. Use the simplest solid move, not deep reasoning.
+- Repeating the same move 3 turns in a row is predictable and usually bad.
+- If you defended last turn and it already worked, do not auto-repeat DEFEND without a fresh read.
 
 Debate topic:
 {self.topic if self.topic else 'No topic. Fight on instinct.'}
 
+Your previous debate points (DO NOT repeat these — every turn must make a completely new argument):
+{past_debates_text}
+
 Output requirements:
-- debate: 1 sentence taking a real stance on the topic (10-20 words)
-- thinking: 1 tactical sentence explaining your move choice (10-20 words)
+- debate: 1-2 sentences with a FRESH specific argument not found in your previous points above (20-40 words). Make a concrete claim with real evidence or reasoning.
+- thinking: 1-2 tactical sentences reading the opponent's pattern and justifying your move (10-20 words)
 - prediction: exactly one valid move word (PUNCH/KICK/DEFEND/DUCK/MOVE_FORWARD/MOVE_BACKWARD)
+- Never leave debate or thinking blank.
 
 Return only JSON:
-{{"debate":"One sentence.","thinking":"One short tactical sentence.","move":"PUNCH","confidence":0.82,"prediction":"DEFEND"}}"""
+{{"debate":"Concrete new argument here.","thinking":"Pattern read and move justification here.","move":"PUNCH","confidence":0.82,"prediction":"DEFEND"}}"""
 
     def resolve_turn(self, p1_move, p2_move, p1_time, p2_time):
         p1_first = p1_time <= p2_time
@@ -502,6 +523,16 @@ Return only JSON:
             distance = self._get_distance()
             actor_name = attacker.name
             target_name = defender.name
+
+            if attacker_move == "NO_DECISION":
+                result["events"].append(
+                    self._log_event(
+                        f"{actor_name} froze up and stood still.",
+                        event_type="stall",
+                        actor=actor_name,
+                    )
+                )
+                continue
 
             if attacker_move in ("PUNCH", "KICK"):
                 if distance == FAR:
@@ -747,7 +778,7 @@ Return only JSON:
         thread2 = threading.Thread(target=run_p2, daemon=True)
         thread1.start()
         thread2.start()
-        join_timeout = max(OLLAMA_TIMEOUT, GROQ_TIMEOUT) + TURN_JOIN_BUFFER
+        join_timeout = self._turn_join_timeout()
         thread1.join(timeout=join_timeout)
         thread2.join(timeout=join_timeout)
 
@@ -762,15 +793,19 @@ Return only JSON:
         self.fighter1.moves_made.append(parsed1["move"])
         self.fighter2.moves_made.append(parsed2["move"])
 
+        invalid_events = self._log_invalid_decision_events(parsed1, parsed2)
         turn_result = self.resolve_turn(
             parsed1["move"],
             parsed2["move"],
             result1["response_time"],
             result2["response_time"],
         )
-        
+        if invalid_events:
+            turn_result["events"] = invalid_events + turn_result["events"]
+        turn_result.setdefault("victory_type", "knockout" if self.game_over and self.winner else "decision")
+        turn_result.setdefault("finish_reason", None)
         self._calculate_rewards(parsed1, parsed2, turn_result)
-        
+
         self.history.append(turn_result)
 
         self.fighter1.last_result = parsed1
@@ -808,8 +843,6 @@ Return only JSON:
                 "confidence": parsed1["confidence"],
                 "prediction": parsed1["prediction"],
                 "decision_source": parsed1.get("decision_source", "model"),
-                "is_fallback": parsed1.get("is_fallback", False),
-                "fallback_reason": parsed1.get("fallback_reason"),
                 "model_error": parsed1.get("model_error"),
                 "response_time": round(result1["response_time"], 2),
                 "error": result1.get("error"),
@@ -826,8 +859,6 @@ Return only JSON:
                 "confidence": parsed2["confidence"],
                 "prediction": parsed2["prediction"],
                 "decision_source": parsed2.get("decision_source", "model"),
-                "is_fallback": parsed2.get("is_fallback", False),
-                "fallback_reason": parsed2.get("fallback_reason"),
                 "model_error": parsed2.get("model_error"),
                 "response_time": round(result2["response_time"], 2),
                 "error": result2.get("error"),
@@ -844,9 +875,15 @@ Return only JSON:
             "live_commentary": None,
             "commentary_feed": self.commentary_feed[-4:],
             "game_over": self.game_over,
-            "winner": self.winner.name if self.winner else ("DRAW" if self.game_over else None),
+            "winner": (
+                self.winner.name
+                if self.winner
+                else ("NO CONTEST" if turn_result.get("victory_type") == "no_contest" else ("DRAW" if self.game_over else None))
+            ),
             "winner_id": self.winner.fighter_id if self.winner else None,
             "winner_position": self.winner.position if self.winner else None,
+            "victory_type": turn_result.get("victory_type"),
+            "finish_reason": turn_result.get("finish_reason"),
         }
 
     def generate_turn_commentary(self, turn_data):
@@ -856,8 +893,8 @@ Return only JSON:
         live_commentary = generate_live_commentary(
             self.topic,
             turn_data.get("turn", self.turn),
-            {"name": self.fighter1.name, **(turn_data.get("p1") or {})},
-            {"name": self.fighter2.name, **(turn_data.get("p2") or {})},
+            {"name": self.fighter1.display_name, **(turn_data.get("p1") or {})},
+            {"name": self.fighter2.display_name, **(turn_data.get("p2") or {})},
             turn_data.get("turn_events") or [],
             self.get_audience_state(),
         )

@@ -44,21 +44,27 @@ def _to_float(value, default):
         return default
 
 
+def _to_bool(value, default=False):
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 DEFAULT_MODEL_SLOTS = {
     "1": {
-        "name": "Llama 3.1 8B",
-        "model_id": "llama-3.1-8b-instant",
-        "provider": "groq",
+        "name": "Devstral Small 2 24B",
+        "model_id": "devstral-small-2:24b-cloud",
+        "provider": "ollama",
         "skin_id": "1",
-        "description": "Ultra-fast 8B Llama model on Groq — sub-second action decisions.",
+        "description": "Fast Ollama cloud Devstral model with strong tactical JSON output.",
         "color": "#ffffff",
     },
     "2": {
-        "name": "Gemma 2 9B",
-        "model_id": "gemma2-9b-it",
-        "provider": "groq",
+        "name": "Ministral 3 14B",
+        "model_id": "ministral-3:14b",
+        "provider": "ollama",
         "skin_id": "2",
-        "description": "Google Gemma 2 9B instruction model — sharp, fast Groq inference.",
+        "description": "Stronger Ollama cloud model with solid tactical JSON responses.",
         "color": "#f55036",
     },
     "3": {
@@ -70,28 +76,53 @@ DEFAULT_MODEL_SLOTS = {
         "color": "#6ef2ff",
     },
     "4": {
-        "name": "GPT OSS 20B",
-        "model_id": "openai/gpt-oss-20b",
-        "provider": "groq",
+        "name": "Gemma 3 12B",
+        "model_id": "gemma3:12b",
+        "provider": "ollama",
         "skin_id": "4",
-        "description": "Groq-hosted GPT OSS setup for fast action selection with short outputs.",
+        "description": "Balanced Ollama cloud model with reliable JSON and stronger debate phrasing.",
         "color": "#ffb347",
     },
 }
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "").strip()
+OLLAMA_API_KEYS = [
+    k for k in [
+        OLLAMA_API_KEY,
+        os.getenv("OLLAMA_API_KEY_2", "").strip(),
+    ]
+    if k
+]
 OLLAMA_TIMEOUT = _to_int(os.getenv("OLLAMA_TIMEOUT"), 10)
+OLLAMA_RETRY_ATTEMPTS = max(1, _to_int(os.getenv("OLLAMA_RETRY_ATTEMPTS"), 2))
+OLLAMA_RETRY_BASE_DELAY = _to_float(os.getenv("OLLAMA_RETRY_BASE_DELAY"), 0.5)
 GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_TIMEOUT = _to_int(os.getenv("GROQ_TIMEOUT"), 8)
-GROQ_RETRY_ATTEMPTS = max(1, _to_int(os.getenv("GROQ_RETRY_ATTEMPTS"), 1))
+GROQ_RETRY_ATTEMPTS = max(1, _to_int(os.getenv("GROQ_RETRY_ATTEMPTS"), 2))
 GROQ_RETRY_BASE_DELAY = _to_float(os.getenv("GROQ_RETRY_BASE_DELAY"), 0.35)
-GROQ_FALLBACK_MODEL = os.getenv("GROQ_FALLBACK_MODEL", "llama-3.1-8b-instant").strip()
+GROQ_MAX_RETRY_WAIT = _to_float(os.getenv("GROQ_MAX_RETRY_WAIT"), 3.0)
 GROQ_RATE_LIMIT_COOLDOWN = _to_float(os.getenv("GROQ_RATE_LIMIT_COOLDOWN"), 8.0)
+ARENA_ENFORCE_MODEL_COMPATIBILITY = _to_bool(os.getenv("ARENA_ENFORCE_MODEL_COMPATIBILITY"), True)
 
-# Per-fighter rate-limit cooldown tracking
+# Per-model rate-limit cooldown tracking.
 _groq_rate_limited_until: dict[str, float] = {}
+
+KNOWN_ARENA_INCOMPATIBLE_MODELS = {
+    ("ollama", "gemini-3-flash-preview:cloud"): (
+        "Gemini 3 Flash Preview on Ollama cloud returns truncated arena JSON and is disabled by default."
+    ),
+}
+
+
+def _arena_support_metadata(provider, model_id):
+    normalized_provider = str(provider or "").strip().lower()
+    normalized_model = str(model_id or "").strip().lower()
+    for (blocked_provider, blocked_model), reason in KNOWN_ARENA_INCOMPATIBLE_MODELS.items():
+        if normalized_provider == blocked_provider and normalized_model == blocked_model:
+            return False, reason
+    return True, ""
 
 
 def _build_model_registry():
@@ -122,6 +153,8 @@ def _build_model_registry():
                 defaults["model_id"],
             )
 
+        arena_supported, arena_warning = _arena_support_metadata(provider, model_id)
+
         models[slot_id] = {
             "fighter_id": slot_id,
             "skin_id": _first_non_empty(
@@ -147,6 +180,8 @@ def _build_model_registry():
                 os.getenv(f"FIGHTER_{slot_id}_COLOR"),
                 defaults["color"],
             ),
+            "arena_supported": arena_supported,
+            "arena_warning": arena_warning,
         }
     return models
 
@@ -158,19 +193,19 @@ BASE_PARAMS = {
     "top_p": 1.0,
     "presence_penalty": 0.0,
     "frequency_penalty": 0.0,
-    "max_tokens": 220,
+    "max_tokens": 350,
 }
 
 FIGHT_SYSTEM = (
     "You are an LLM boxer in a live benchmark arena. "
     "Return ONLY a single valid JSON object — no prose, no markdown, no text outside the JSON. "
     "Keys: "
-    '"debate" (one punchy sentence taking a stance on the topic), '
-    '"thinking" (one tactical sentence about what move to pick and why), '
+    '"debate" (1-2 sentences taking a specific, original stance on the topic — make a concrete argument with real reasoning, never repeat what you said before), '
+    '"thinking" (1-2 tactical sentences: read opponent\'s pattern and justify your move choice), '
     '"move" (exactly one of PUNCH, KICK, DEFEND, DUCK, MOVE_FORWARD, MOVE_BACKWARD), '
     '"confidence" (0.0-1.0), '
     '"prediction" (exactly one of PUNCH, KICK, DEFEND, DUCK, MOVE_FORWARD, MOVE_BACKWARD). '
-    'Example: {"debate":"Speed always beats brute strength in any contest.","thinking":"Opponent punched twice, they will punch again so I duck.","move":"DUCK","confidence":0.78,"prediction":"PUNCH"}'
+    'Example: {"debate":"Automation historically creates more jobs than it eliminates, but the transition period devastates workers without retraining support.","thinking":"Opponent has punched 3 turns straight, they will punch again so I duck to avoid it.","move":"DUCK","confidence":0.78,"prediction":"PUNCH"}'
 )
 
 
@@ -188,12 +223,15 @@ def _base_result(elapsed=0.0, text="", error=None, error_type=None, key_used="n/
     }
 
 
-def call_ollama(model_id, prompt, params):
+def call_ollama(model_id, prompt, params, api_key_index: int = 0):
     """Call Ollama's HTTP API for local or remote models."""
     url = f"{OLLAMA_BASE_URL}/api/generate"
     headers = {}
-    if OLLAMA_API_KEY:
-        headers["Authorization"] = f"Bearer {OLLAMA_API_KEY}"
+    chosen_key = OLLAMA_API_KEYS[api_key_index] if OLLAMA_API_KEYS else ""
+    if not chosen_key and OLLAMA_API_KEYS:
+        chosen_key = OLLAMA_API_KEYS[0]
+    if chosen_key:
+        headers["Authorization"] = f"Bearer {chosen_key}"
 
     repeat_penalty = 1.0
     repeat_penalty += _clamp(_to_float(params.get("frequency_penalty"), 0.0), 0.0, 2.0) * 0.35
@@ -202,6 +240,7 @@ def call_ollama(model_id, prompt, params):
     payload = {
         "model": model_id,
         "prompt": f"{FIGHT_SYSTEM}\n\n{prompt}",
+        "format": "json",
         "stream": False,
         "options": {
             "temperature": _clamp(_to_float(params.get("temperature"), 0.7), 0.0, 2.0),
@@ -211,45 +250,92 @@ def call_ollama(model_id, prompt, params):
         },
     }
 
-    started = time.time()
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=OLLAMA_TIMEOUT)
-    except Exception as exc:
-        elapsed = time.time() - started
-        return _base_result(
-            elapsed=elapsed,
-            error=str(exc),
-            error_type="network",
-            key_used="ollama",
-        )
+    call_started = time.time()
+    last_result = None
+    for attempt in range(OLLAMA_RETRY_ATTEMPTS):
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=OLLAMA_TIMEOUT)
+        except Exception as exc:
+            last_result = _base_result(
+                elapsed=time.time() - call_started,
+                error=str(exc),
+                error_type="network",
+                key_used="ollama",
+            )
+            break
 
-    elapsed = time.time() - started
-    if response.status_code != 200:
-        return _base_result(
-            elapsed=elapsed,
+        if response.status_code == 200:
+            data = response.json()
+            return _base_result(
+                elapsed=time.time() - call_started,
+                text=data.get("response", ""),
+                key_used=f"ollama-cloud-{api_key_index}" if chosen_key else "ollama-local",
+            )
+
+        last_result = _base_result(
+            elapsed=time.time() - call_started,
             error=f"{response.status_code}: {response.text[:400]}",
             error_type="api",
             key_used="ollama",
         )
+        if response.status_code >= 500 and attempt + 1 < OLLAMA_RETRY_ATTEMPTS:
+            time.sleep(OLLAMA_RETRY_BASE_DELAY * (attempt + 1))
+            continue
+        break
 
-    data = response.json()
-    return _base_result(
-        elapsed=elapsed,
-        text=data.get("response", ""),
-        key_used="ollama-cloud" if OLLAMA_API_KEY else "ollama-local",
+    return last_result or _base_result(
+        error="Ollama request failed",
+        error_type="api",
+        key_used="ollama",
     )
 
 
-def _is_groq_cooling(fighter_key: str) -> bool:
-    """Return True if this fighter key is in a Groq rate-limit cooldown."""
-    until = _groq_rate_limited_until.get(fighter_key, 0.0)
+def _normalize_model_id(model_id):
+    return str(model_id or "").strip()
+
+
+def _groq_supports_json_object_response_format(model_id):
+    normalized = _normalize_model_id(model_id).lower()
+    unsupported_prefixes = (
+        "openai/gpt-oss",
+        "qwen/qwen3",
+    )
+    return not any(normalized.startswith(prefix) for prefix in unsupported_prefixes)
+
+
+def _coerce_groq_text(value):
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts = []
+        for item in value:
+            if isinstance(item, dict):
+                parts.append(str(item.get("text") or item.get("content") or ""))
+            else:
+                parts.append(str(item))
+        return "".join(parts)
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _is_groq_cooling(model_key: str) -> bool:
+    """Return True if this Groq model is in a rate-limit cooldown."""
+    until = _groq_rate_limited_until.get(model_key, 0.0)
     return time.time() < until
 
 
-def _set_groq_cooldown(fighter_key: str, retry_after: float | None = None) -> None:
-    """Set a cooldown for a fighter after hitting a 429."""
+def _set_groq_cooldown(model_key: str, retry_after: float | None = None) -> None:
+    """Set a cooldown for a Groq model after hitting a 429."""
     duration = retry_after if (retry_after and 0 < retry_after < 120) else GROQ_RATE_LIMIT_COOLDOWN
-    _groq_rate_limited_until[fighter_key] = time.time() + duration
+    _groq_rate_limited_until[model_key] = time.time() + duration
+
+
+def _bounded_retry_wait(retry_after, attempt):
+    base_wait = GROQ_RETRY_BASE_DELAY * (attempt + 1)
+    hinted_wait = retry_after if (retry_after and retry_after > 0) else 0.0
+    wait = max(base_wait, hinted_wait)
+    return max(0.0, min(wait, GROQ_MAX_RETRY_WAIT))
 
 
 def call_groq(model_id, prompt, params, fighter_key: str = ""):
@@ -257,101 +343,127 @@ def call_groq(model_id, prompt, params, fighter_key: str = ""):
     if not GROQ_API_KEY:
         return _base_result(error="Groq API key is missing", error_type="config", key_used="missing")
 
-    # Honour per-fighter cooldown — skip the network call entirely
-    if fighter_key and _is_groq_cooling(fighter_key):
-        until = _groq_rate_limited_until[fighter_key]
-        wait = max(0.0, until - time.time())
-        return _base_result(
-            error=f"429: rate limited on {model_id} (cooling {wait:.1f}s)",
-            error_type="rate_limit",
-            key_used=f"groq:{model_id}",
-        )
-
+    call_started = time.time()
     url = f"{GROQ_BASE_URL}/chat/completions"
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json",
     }
-    candidate_models = []
-    for candidate in [model_id, GROQ_FALLBACK_MODEL]:
-        candidate = str(candidate or "").strip()
-        if candidate and candidate not in candidate_models:
-            candidate_models.append(candidate)
+    model_id = _normalize_model_id(model_id)
+    if _is_groq_cooling(model_id):
+        until = _groq_rate_limited_until[model_id]
+        wait = max(0.0, until - time.time())
+        bounded_wait = min(wait, GROQ_MAX_RETRY_WAIT)
+        if bounded_wait > 0 and GROQ_RETRY_ATTEMPTS > 1:
+            time.sleep(bounded_wait)
+        elif wait > 0:
+            return _base_result(
+                elapsed=time.time() - call_started,
+                error=f"429: rate limited on {model_id} (cooling {wait:.1f}s)",
+                error_type="rate_limit",
+                key_used=f"groq:{model_id}",
+            )
+
+    if _is_groq_cooling(model_id):
+        wait = max(0.0, _groq_rate_limited_until[model_id] - time.time())
+        return _base_result(
+            elapsed=time.time() - call_started,
+            error=f"429: rate limited on {model_id} (cooling {wait:.1f}s)",
+            error_type="rate_limit",
+            key_used=f"groq:{model_id}",
+        )
+
+    payload = {
+        "model": model_id,
+        "temperature": _clamp(_to_float(params.get("temperature"), 0.7), 0.0, 2.0),
+        "top_p": _clamp(_to_float(params.get("top_p"), 1.0), 0.1, 1.0),
+        "max_tokens": max(180, _to_int(params.get("max_tokens"), 220)),
+        "presence_penalty": _clamp(_to_float(params.get("presence_penalty"), 0.0), -2.0, 2.0),
+        "frequency_penalty": _clamp(_to_float(params.get("frequency_penalty"), 0.0), -2.0, 2.0),
+        "messages": [
+            {"role": "system", "content": FIGHT_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+    }
+    if _groq_supports_json_object_response_format(model_id):
+        payload["response_format"] = {"type": "json_object"}
 
     last_result = None
-    for candidate_model in candidate_models:
-        payload = {
-            "model": candidate_model,
-            "temperature": _clamp(_to_float(params.get("temperature"), 0.7), 0.0, 2.0),
-            "top_p": _clamp(_to_float(params.get("top_p"), 1.0), 0.1, 1.0),
-            "max_tokens": max(180, _to_int(params.get("max_tokens"), 220)),
-            "presence_penalty": _clamp(_to_float(params.get("presence_penalty"), 0.0), -2.0, 2.0),
-            "frequency_penalty": _clamp(_to_float(params.get("frequency_penalty"), 0.0), -2.0, 2.0),
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": FIGHT_SYSTEM},
-                {"role": "user", "content": prompt},
-            ],
-        }
-
-        for attempt in range(GROQ_RETRY_ATTEMPTS):
-            started = time.time()
-            try:
-                response = requests.post(url, json=payload, headers=headers, timeout=GROQ_TIMEOUT)
-            except Exception as exc:
-                elapsed = time.time() - started
-                last_result = _base_result(
-                    elapsed=elapsed,
-                    error=str(exc),
-                    error_type="network",
-                    key_used=f"groq:{candidate_model}",
-                )
-                break
-
-            elapsed = time.time() - started
-            if response.status_code == 429:
-                # Parse Retry-After header if provided
-                retry_after = None
-                try:
-                    retry_after = float(response.headers.get("Retry-After", 0) or 0)
-                except (ValueError, TypeError):
-                    pass
-                _set_groq_cooldown(fighter_key or model_id, retry_after)
-                last_result = _base_result(
-                    elapsed=elapsed,
-                    error=f"429: rate limited on {candidate_model}",
-                    error_type="rate_limit",
-                    key_used=f"groq:{candidate_model}",
-                )
-                if attempt + 1 < GROQ_RETRY_ATTEMPTS:
-                    time.sleep(GROQ_RETRY_BASE_DELAY * (attempt + 1))
-                    continue
-                break
-
-            if response.status_code != 200:
-                return _base_result(
-                    elapsed=elapsed,
-                    error=f"{response.status_code}: {response.text[:400]}",
-                    error_type="api",
-                    key_used=f"groq:{candidate_model}",
-                )
-
-            data = response.json()
-            choices = data.get("choices", [])
-            if not choices:
-                return _base_result(
-                    elapsed=elapsed,
-                    error="Empty response from Groq",
-                    error_type="empty",
-                    key_used=f"groq:{candidate_model}",
-                )
-
-            message = choices[0].get("message", {})
-            return _base_result(
-                elapsed=elapsed,
-                text=message.get("content", ""),
-                key_used=f"groq:{candidate_model}",
+    for attempt in range(GROQ_RETRY_ATTEMPTS):
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=GROQ_TIMEOUT)
+        except Exception as exc:
+            last_result = _base_result(
+                elapsed=time.time() - call_started,
+                error=str(exc),
+                error_type="network",
+                key_used=f"groq:{model_id}",
             )
+            break
+
+        if response.status_code == 429:
+            retry_after = None
+            try:
+                retry_after = float(response.headers.get("Retry-After", 0) or 0)
+            except (ValueError, TypeError):
+                pass
+            _set_groq_cooldown(model_id, retry_after)
+            last_result = _base_result(
+                elapsed=time.time() - call_started,
+                error=f"429: rate limited on {model_id}",
+                error_type="rate_limit",
+                key_used=f"groq:{model_id}",
+            )
+            if attempt + 1 < GROQ_RETRY_ATTEMPTS:
+                wait = _bounded_retry_wait(retry_after, attempt)
+                if wait > 0:
+                    time.sleep(wait)
+                continue
+            break
+
+        if response.status_code != 200:
+            error_body = response.text[:400]
+            last_result = _base_result(
+                elapsed=time.time() - call_started,
+                error=f"{response.status_code}: {error_body}",
+                error_type="api",
+                key_used=f"groq:{model_id}",
+            )
+            should_retry = (
+                response.status_code >= 500
+                or (response.status_code == 400 and "json_validate_fai" in error_body)
+            )
+            if should_retry and attempt + 1 < GROQ_RETRY_ATTEMPTS:
+                time.sleep(GROQ_RETRY_BASE_DELAY * (attempt + 1))
+                continue
+            break
+
+        data = response.json()
+        choices = data.get("choices", [])
+        if not choices:
+            last_result = _base_result(
+                elapsed=time.time() - call_started,
+                error="Empty response from Groq",
+                error_type="empty",
+                key_used=f"groq:{model_id}",
+            )
+            break
+
+        message = choices[0].get("message", {})
+        content = _coerce_groq_text(message.get("content", ""))
+        if not content.strip():
+            last_result = _base_result(
+                elapsed=time.time() - call_started,
+                error=f"Empty content from Groq model {model_id}",
+                error_type="empty",
+                key_used=f"groq:{model_id}",
+            )
+            break
+        return _base_result(
+            elapsed=time.time() - call_started,
+            text=content,
+            key_used=f"groq:{model_id}",
+        )
 
     return last_result or _base_result(
         error="Groq request failed",
@@ -366,11 +478,21 @@ def call_model(fighter_id, prompt, sabotage_params):
     if not info:
         return _base_result(error=f"Unknown fighter: {fighter_id}", error_type="config", key_used="n/a")
 
+    if ARENA_ENFORCE_MODEL_COMPATIBILITY and not info.get("arena_supported", True):
+        provider = info.get("provider", "unknown")
+        model_id = info.get("model_id", "")
+        warning = info.get("arena_warning") or "Model is disabled for arena use."
+        return _base_result(
+            error=warning,
+            error_type="config",
+            key_used=f"{provider}:{model_id}",
+        )
+
     params = {**BASE_PARAMS, **(sabotage_params or {})}
     provider = info.get("provider", "ollama").lower()
 
     if provider == "ollama":
-        return call_ollama(info["model_id"], prompt, params)
+        return call_ollama(info["model_id"], prompt, params, api_key_index=info.get("api_key_index", 0))
 
     if provider == "groq":
         return call_groq(info["model_id"], prompt, params, fighter_key=str(fighter_id))
@@ -418,8 +540,18 @@ def _extract_debate(data):
     return str(data.get("debate", "")).strip()[:1000]
 
 
-def _normalize_move(move):
-    raw = str(move or "DEFEND").upper().strip().replace("-", "_")
+def _has_meaningful_text(value, min_words=3, min_chars=12):
+    text = " ".join(str(value or "").split()).strip()
+    if len(text) < min_chars:
+        return False
+    words = [word for word in re.split(r"\s+", text) if word]
+    return len(words) >= min_words
+
+
+def _normalize_move(move, default=""):
+    raw = str(move if move is not None else default).upper().strip().replace("-", "_")
+    if not raw:
+        raw = str(default or "").upper().strip().replace("-", "_")
     raw = raw.replace("  ", " ")
     raw = MOVE_ALIASES.get(raw, raw)
     return raw.replace(" ", "_")
@@ -430,7 +562,7 @@ def parse_llm_response(text):
     valid_moves = ["PUNCH", "KICK", "DEFEND", "DUCK", "MOVE_FORWARD", "MOVE_BACKWARD"]
 
     if not text or not text.strip():
-        return _default("No response from model")
+        return _invalid("No response from model", text)
 
     clean = text.strip()
     clean = re.sub(r"<think>.*?</think>", "", clean, flags=re.DOTALL).strip()
@@ -438,7 +570,7 @@ def parse_llm_response(text):
 
     start = clean.find("{")
     if start == -1:
-        return _fallback(clean, valid_moves, text)
+        return _invalid("Model did not return a JSON object", text)
 
     json_blob = clean[start:]
 
@@ -463,9 +595,9 @@ def parse_llm_response(text):
 
     if move_match:
         move = _normalize_move(move_match.group(1))
-        if move in valid_moves:
-            ostrat = think_match.group(1) if think_match else "Extracted from partial response"
-            odebate = debate_match.group(1) if debate_match else ""
+        odebate = debate_match.group(1) if debate_match else ""
+        ostrat = think_match.group(1) if think_match else ""
+        if move in valid_moves and _has_meaningful_text(odebate) and _has_meaningful_text(ostrat):
             if odebate:
                 final_think = f"[DEBATE] {odebate} [TACTICS] {ostrat}"[:1000]
             else:
@@ -479,52 +611,47 @@ def parse_llm_response(text):
                 "confidence": float(confidence_match.group(1)) if confidence_match else 0.5,
                 "prediction": prediction_match.group(1) if prediction_match else "Unknown",
                 "raw": text,
+                "valid": True,
+                "parse_error": None,
             }
 
-    return _fallback(clean, valid_moves, text)
+    return _invalid("Model returned malformed or incomplete JSON", text)
 
 def _from_data(data, valid_moves, raw):
-    move = _normalize_move(data.get("move", data.get("action", "DEFEND")))
+    move = _normalize_move(data.get("move", data.get("action", "")))
     if move not in valid_moves:
-        move = "DEFEND"
-    raw_pred = _normalize_move(str(data.get("prediction", "DEFEND")))
-    prediction = raw_pred if raw_pred in valid_moves else "DEFEND"
+        bad_move = data.get("move", data.get("action", ""))
+        return _invalid(f"Invalid or missing move: {bad_move}", raw)
+    debate = _extract_debate(data)
+    tactics = _extract_tactics(data)
+    if not _has_meaningful_text(debate):
+        return _invalid("Missing or too-short debate field", raw)
+    if not _has_meaningful_text(tactics):
+        return _invalid("Missing or too-short thinking field", raw)
+    raw_pred = _normalize_move(str(data.get("prediction", "")))
+    prediction = raw_pred if raw_pred in valid_moves else "Unknown"
     return {
         "thinking": _extract_thinking(data),
-        "tactics": _extract_tactics(data),
-        "debate": _extract_debate(data),
+        "tactics": tactics,
+        "debate": debate,
         "move": move,
         "confidence": _clamp(_to_float(data.get("confidence"), 0.5), 0.0, 1.0),
         "prediction": prediction,
         "raw": raw,
+        "valid": True,
+        "parse_error": None,
     }
 
 
-def _fallback(clean, valid_moves, raw):
-    upper = clean.upper()
-    for move in ["MOVE_FORWARD", "MOVE_BACKWARD", "KICK", "PUNCH", "DUCK", "DEFEND", "BOX"]:
-        if move in upper:
-            normalized = _normalize_move(move)
-            if normalized in valid_moves:
-                return {
-                    "thinking": clean[:300],
-                    "tactics": clean[:300],
-                    "debate": "",
-                    "move": normalized,
-                    "confidence": 0.3,
-                    "prediction": "Unknown",
-                    "raw": raw,
-                }
-    return _default(clean[:300])
-
-
-def _default(message):
+def _invalid(message, raw=""):
     return {
         "thinking": message,
         "tactics": message,
         "debate": "",
-        "move": "DEFEND",
-        "confidence": 0.1,
+        "move": "NO_DECISION",
+        "confidence": 0.0,
         "prediction": "Unknown",
-        "raw": "",
+        "raw": raw,
+        "valid": False,
+        "parse_error": message,
     }

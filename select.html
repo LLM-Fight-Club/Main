@@ -466,14 +466,15 @@
             : 'http://localhost:5000';
 
         function PlayerButton({ fighterId, model, selected, disabled, onClick, customName }) {
-            const className = `player-btn ${selected ? 'selected' : ''} ${disabled ? 'disabled' : ''}`;
+            const unsupported = model.arena_supported === false;
+            const className = `player-btn ${selected ? 'selected' : ''} ${(disabled || unsupported) ? 'disabled' : ''}`;
             const skinId = model.skin_id || fighterId;
             return React.createElement('div', { style: { textAlign: 'center', maxWidth: '90px' } }, [
                 React.createElement('button', {
                     key: `btn-${fighterId}`,
                     className,
                     'data-player': fighterId,
-                    onClick: () => !disabled && onClick(fighterId)
+                    onClick: () => !(disabled || unsupported) && onClick(fighterId)
                 },
                     React.createElement('img', {
                         src: `assets/images/characters/player${skinId}.png`,
@@ -504,7 +505,17 @@
                         fontFamily: 'Press Start 2P, monospace',
                         lineHeight: '1.4'
                     }
-                }, (model.provider || '').toUpperCase())
+                }, (model.provider || '').toUpperCase()),
+                unsupported && React.createElement('div', {
+                    key: `warning-${fighterId}`,
+                    style: {
+                        fontSize: '6px',
+                        color: '#ffb1a8',
+                        marginTop: '4px',
+                        fontFamily: 'Press Start 2P, monospace',
+                        lineHeight: '1.4'
+                    }
+                }, 'ARENA OFF')
             ]);
         }
 

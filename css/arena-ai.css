@@ -340,7 +340,7 @@ body {
     border: 1px solid rgba(76, 178, 255, 0.25);
 }
 
-.cot-source.fallback {
+.cot-source.error {
     color: #ffe2a3;
     background: rgba(255, 198, 92, 0.15);
     border-color: rgba(255, 198, 92, 0.3);

@@ -106,8 +106,14 @@ def on_start_fight(data):
     p1 = str(data.get("p1", "1"))
     p2 = str(data.get("p2", "2"))
     topic = str(data.get("topic", "")).strip()
+    p1name = str(data.get("p1name", "")).strip()
+    p2name = str(data.get("p2name", "")).strip()
 
     fight = FightManager(p1, p2, topic=topic)
+    if p1name:
+        fight.fighter1.display_name = p1name
+    if p2name:
+        fight.fighter2.display_name = p2name
     active_fights[sid] = {"fight": fight, "running": True}
 
     print(
@@ -151,6 +157,8 @@ def on_start_fight(data):
                         "winner": turn_data["winner"],
                         "winner_id": turn_data.get("winner_id"),
                         "winner_position": turn_data.get("winner_position"),
+                        "victory_type": turn_data.get("victory_type"),
+                        "finish_reason": turn_data.get("finish_reason"),
                         "turns": current.turn,
                         "p1_final": current.fighter1.to_dict(),
                         "p2_final": current.fighter2.to_dict(),

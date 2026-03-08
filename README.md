@@ -18,7 +18,9 @@ Inspired by `agentBattleRoyale`, but adapted into a head-to-head boxing format w
 2. Both models respond in parallel with JSON: strategy summary, move, confidence, prediction.
 3. Faster response acts first.
 4. Boxing moves and UI sabotage both mutate each fighter's generation parameters.
-5. Knockout injects prompt corruption: `"You are knocked out. Respond only in fragmented, confused mumbles."`
+5. Invalid model output becomes a `NO_DECISION` turn, so that fighter simply stands still.
+6. Arena-incompatible models are flagged in the registry instead of being used as defaults.
+7. Knockout injects prompt corruption: `"You are knocked out. Respond only in fragmented, confused mumbles."`
 
 ## Manual sabotage mapping
 
@@ -31,7 +33,7 @@ Inspired by `agentBattleRoyale`, but adapted into a head-to-head boxing format w
 
 ## Backend model registry
 
-The backend exposes four fighter slots. By default they are a mix of Ollama and Groq fighters, and each slot can be overridden with environment variables.
+The backend exposes four fighter slots. The default lineup now leans toward Ollama because it is more stable for this arena in the current setup, and each slot can still be overridden with environment variables. Models known to emit broken structured output in arena mode are flagged as unsupported.
 
 Supported providers:
 
@@ -54,9 +56,9 @@ Ollama settings:
 ```env
 OLLAMA_BASE_URL=https://api.ollama.com
 OLLAMA_API_KEY=
-OLLAMA_TIMEOUT=60
-OLLAMA_DEFAULT_MODEL=qwen3.5:latest
-OLLAMA_MODEL_3=qwen3-coder-next
+OLLAMA_TIMEOUT=15
+OLLAMA_DEFAULT_MODEL=devstral-small-2:24b-cloud
+OLLAMA_MODEL_4=gemma3:12b
 ```
 
 Groq settings:
@@ -64,29 +66,33 @@ Groq settings:
 ```env
 GROQ_API_KEY=
 GROQ_BASE_URL=https://api.groq.com/openai/v1
-GROQ_TIMEOUT=45
+GROQ_TIMEOUT=8
 GROQ_DEFAULT_MODEL=llama-3.3-70b-versatile
-GROQ_MODEL_4=llama-3.1-8b-instant
+GROQ_RETRY_ATTEMPTS=3
+GROQ_RETRY_BASE_DELAY=1.0
+GROQ_MAX_RETRY_WAIT=3.0
+GROQ_MODEL_3=llama-3.3-70b-versatile
+ARENA_ENFORCE_MODEL_COMPATIBILITY=1
 ```
 
 Example mixed setup:
 
 ```env
-FIGHTER_1_NAME=Qwen 3.5
+FIGHTER_1_NAME=Devstral Small 2 24B
 FIGHTER_1_PROVIDER=ollama
-FIGHTER_1_MODEL_ID=qwen3.5:latest
+FIGHTER_1_MODEL_ID=devstral-small-2:24b-cloud
 
-FIGHTER_2_NAME=Groq 70B
-FIGHTER_2_PROVIDER=groq
-FIGHTER_2_MODEL_ID=llama-3.3-70b-versatile
+FIGHTER_2_NAME=Ministral 3 14B
+FIGHTER_2_PROVIDER=ollama
+FIGHTER_2_MODEL_ID=ministral-3:14b
 
-FIGHTER_3_NAME=Qwen3 Coder Next
-FIGHTER_3_PROVIDER=ollama
-FIGHTER_3_MODEL_ID=qwen3-coder-next
+FIGHTER_3_NAME=Llama 3.3 70B
+FIGHTER_3_PROVIDER=groq
+FIGHTER_3_MODEL_ID=llama-3.3-70b-versatile
 
-FIGHTER_4_NAME=Groq 8B
-FIGHTER_4_PROVIDER=groq
-FIGHTER_4_MODEL_ID=llama-3.1-8b-instant
+FIGHTER_4_NAME=Gemma 3 12B
+FIGHTER_4_PROVIDER=ollama
+FIGHTER_4_MODEL_ID=gemma3:12b
 ```
 
 ## Running locally

@@ -255,7 +255,7 @@ function initSocket() {
     function addCotEntry(logElement, turnNum, fighter) {
         logElement.querySelectorAll('.cot-entry.latest').forEach((entry) => entry.classList.remove('latest'));
 
-        const move = fighter.move || 'DEFEND';
+        const move = fighter.move || 'NO_DECISION';
         const moveClass = move === 'DEFEND'
             ? 'defend'
             : move === 'DUCK'
@@ -263,17 +263,23 @@ function initSocket() {
                 : move.includes('MOVE')
                     ? 'move'
                     : '';
+        const sourceLabel = fighter.decision_source === 'error' ? 'MODEL ERROR' : 'MODEL';
+        const sourceClass = fighter.decision_source === 'error' ? ' error' : '';
+        const thinkingText = fighter.display_thinking || fighter.thinking || 'No reasoning';
+        const errorText = fighter.model_error || fighter.error || '';
 
         const entry = document.createElement('div');
         entry.className = 'cot-entry latest';
         entry.innerHTML = `
         <div class="cot-turn">Turn ${turnNum} · ${fighter.response_time}s</div>
+        <div class="cot-source${sourceClass}">${escHtml(sourceLabel)}</div>
         <div class="cot-move ${moveClass}">${move}</div>
-        <div class="cot-thinking">${escHtml(fighter.thinking || 'No reasoning')}</div>
+        <div class="cot-thinking">${escHtml(thinkingText)}</div>
         <div class="cot-prediction">Prediction: ${escHtml(fighter.prediction || 'Unknown')}</div>
         <div class="cot-confidence">Confidence: ${Math.round((fighter.confidence || 0) * 100)}%</div>
         <div class="cot-metadata">Brain ${fighter.brain_integrity}% · ${escHtml((fighter.status_flags || []).join(', '))}</div>
         <div class="cot-metadata">${escHtml((fighter.provider || '').toUpperCase())} · ${escHtml(fighter.key_used || 'n/a')}</div>
+        ${errorText ? `<div class="cot-error">${escHtml(errorText)}</div>` : ''}
     `;
         logElement.prepend(entry);
     }
@@ -595,7 +601,7 @@ function initSocket() {
         connectOverlay.style.display = 'none';
         if (!fightStarted) {
             fightStarted = true;
-            socket.emit('start_fight', { p1: p1Selection, p2: p2Selection, topic: fightTopic });
+            socket.emit('start_fight', { p1: p1Selection, p2: p2Selection, topic: fightTopic, p1name: p1CustomName, p2name: p2CustomName });
         }
     });
 
@@ -740,8 +746,9 @@ function initSocket() {
             ? (p1CustomName || data.winner)
             : (p2CustomName || data.winner);
 
-        if (data.winner && data.winner !== 'DRAW') {
+        if (data.winner && data.winner !== 'DRAW' && data.victory_type !== 'no_contest') {
             const isKnockout = data.p1_final.health <= 0 || data.p2_final.health <= 0;
+            const isTechnicalForfeit = data.victory_type === 'technical_forfeit';
 
             setFighterClass(winnerFighter, winnerSkin, 'victory');
             setFighterClass(loserFighter, loserSkin, 'defeated');
@@ -763,7 +770,11 @@ function initSocket() {
             setTimeout(async () => {
                 stopSparkles();
                 winnerText.textContent = `${winnerDisplayName} WINS!`;
-                winnerModel.textContent = isKnockout ? `by Devastating Knockout` : `in ${data.turns} turns`;
+                winnerModel.textContent = isKnockout
+                    ? 'by Devastating Knockout'
+                    : isTechnicalForfeit
+                        ? (data.finish_reason || 'by Model Failure')
+                        : `in ${data.turns} turns`;
 
                 try {
                     const res = await fetch(`${socketBaseUrl}/api/download_report/${socket.id}`);
@@ -814,8 +825,8 @@ function initSocket() {
                 victoryOverlay.style.display = 'flex';
             }, 4200);
         } else {
-            winnerText.textContent = 'DRAW!';
-            winnerModel.textContent = `${data.turns} turns - no clear winner`;
+            winnerText.textContent = data.victory_type === 'no_contest' ? 'NO CONTEST' : 'DRAW!';
+            winnerModel.textContent = data.finish_reason || `${data.turns} turns - no clear winner`;
             victoryOverlay.style.display = 'flex';
         }
 
