@@ -469,10 +469,9 @@ Debate topic:
 {self.topic if self.topic else 'No topic. Fight on instinct.'}
 
 Output requirements:
-- debate: 1 sentence, max 8 words
-- thinking: 1 sentence, max 8 words
-- prediction: single move word
-- CRITICAL: entire JSON must be under 200 tokens, keep all values very short
+- debate: 1 sentence taking a real stance on the topic (10-20 words)
+- thinking: 1 tactical sentence explaining your move choice (10-20 words)
+- prediction: exactly one valid move word (PUNCH/KICK/DEFEND/DUCK/MOVE_FORWARD/MOVE_BACKWARD)
 
 Return only JSON:
 {{"debate":"One sentence.","thinking":"One short tactical sentence.","move":"PUNCH","confidence":0.82,"prediction":"DEFEND"}}"""

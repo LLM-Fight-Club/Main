@@ -163,14 +163,14 @@ BASE_PARAMS = {
 
 FIGHT_SYSTEM = (
     "You are an LLM boxer in a live benchmark arena. "
-    "Return ONLY a single JSON object — no prose, no markdown, no explanation before or after. "
+    "Return ONLY a single valid JSON object — no prose, no markdown, no text outside the JSON. "
     "Keys: "
-    '"debate" (under 8 words on the topic), '
-    '"thinking" (under 8 words tactical), '
+    '"debate" (one punchy sentence taking a stance on the topic), '
+    '"thinking" (one tactical sentence about what move to pick and why), '
     '"move" (exactly one of PUNCH, KICK, DEFEND, DUCK, MOVE_FORWARD, MOVE_BACKWARD), '
     '"confidence" (0.0-1.0), '
-    '"prediction" (opponent next move, one word). '
-    "Example: {\"debate\":\"Speed beats strength always.\",\"thinking\":\"He last punched, duck it.\",\"move\":\"DUCK\",\"confidence\":0.75,\"prediction\":\"PUNCH\"}"
+    '"prediction" (exactly one of PUNCH, KICK, DEFEND, DUCK, MOVE_FORWARD, MOVE_BACKWARD). '
+    'Example: {"debate":"Speed always beats brute strength in any contest.","thinking":"Opponent punched twice, they will punch again so I duck.","move":"DUCK","confidence":0.78,"prediction":"PUNCH"}'
 )
 
 
@@ -487,13 +487,15 @@ def _from_data(data, valid_moves, raw):
     move = _normalize_move(data.get("move", data.get("action", "DEFEND")))
     if move not in valid_moves:
         move = "DEFEND"
+    raw_pred = _normalize_move(str(data.get("prediction", "DEFEND")))
+    prediction = raw_pred if raw_pred in valid_moves else "DEFEND"
     return {
         "thinking": _extract_thinking(data),
         "tactics": _extract_tactics(data),
         "debate": _extract_debate(data),
         "move": move,
         "confidence": _clamp(_to_float(data.get("confidence"), 0.5), 0.0, 1.0),
-        "prediction": str(data.get("prediction", "Unknown"))[:200],
+        "prediction": prediction,
         "raw": raw,
     }
 
