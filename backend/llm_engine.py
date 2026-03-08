@@ -91,6 +91,7 @@ OLLAMA_API_KEYS = [
     k for k in [
         OLLAMA_API_KEY,
         os.getenv("OLLAMA_API_KEY_2", "").strip(),
+        os.getenv("OLLAMA_API_KEY_3", "").strip(),
     ]
     if k
 ]
@@ -108,6 +109,9 @@ ARENA_ENFORCE_MODEL_COMPATIBILITY = _to_bool(os.getenv("ARENA_ENFORCE_MODEL_COMP
 
 # Per-model rate-limit cooldown tracking.
 _groq_rate_limited_until: dict[str, float] = {}
+
+# Per-fighter call counter for round-robin key rotation.
+_ollama_call_counters: dict[str, int] = {}
 
 KNOWN_ARENA_INCOMPATIBLE_MODELS = {
     ("ollama", "gemini-3-flash-preview:cloud"): (
@@ -172,6 +176,10 @@ def _build_model_registry():
                 os.getenv(f"FIGHTER_{slot_id}_API_KEY_INDEX"),
                 defaults.get("api_key_index", 0),
             ),
+            "rotate_keys": _to_bool(
+                os.getenv(f"FIGHTER_{slot_id}_ROTATE_KEYS"),
+                defaults.get("rotate_keys", False),
+            ),
             "description": _first_non_empty(
                 os.getenv(f"FIGHTER_{slot_id}_DESCRIPTION"),
                 defaults["description"],
@@ -224,14 +232,11 @@ def _base_result(elapsed=0.0, text="", error=None, error_type=None, key_used="n/
 
 
 def call_ollama(model_id, prompt, params, api_key_index: int = 0):
-    """Call Ollama's HTTP API for local or remote models."""
+    """Call Ollama's HTTP API for local or remote models.
+
+    On 5xx errors, rotates through all available API keys before giving up.
+    """
     url = f"{OLLAMA_BASE_URL}/api/generate"
-    headers = {}
-    chosen_key = OLLAMA_API_KEYS[api_key_index] if OLLAMA_API_KEYS else ""
-    if not chosen_key and OLLAMA_API_KEYS:
-        chosen_key = OLLAMA_API_KEYS[0]
-    if chosen_key:
-        headers["Authorization"] = f"Bearer {chosen_key}"
 
     repeat_penalty = 1.0
     repeat_penalty += _clamp(_to_float(params.get("frequency_penalty"), 0.0), 0.0, 2.0) * 0.35
@@ -250,9 +255,25 @@ def call_ollama(model_id, prompt, params, api_key_index: int = 0):
         },
     }
 
+    # Build ordered key rotation: start from preferred index, then cycle through others
+    if OLLAMA_API_KEYS:
+        num_keys = len(OLLAMA_API_KEYS)
+        key_order = [OLLAMA_API_KEYS[(api_key_index + i) % num_keys] for i in range(num_keys)]
+    else:
+        key_order = [""]
+
+    total_attempts = max(OLLAMA_RETRY_ATTEMPTS, len(key_order))
     call_started = time.time()
     last_result = None
-    for attempt in range(OLLAMA_RETRY_ATTEMPTS):
+
+    for attempt in range(total_attempts):
+        # Rotate key: use next key in order on each retry
+        current_key = key_order[attempt % len(key_order)]
+        headers = {}
+        if current_key:
+            headers["Authorization"] = f"Bearer {current_key}"
+        key_label = f"ollama-cloud-key{(api_key_index + attempt) % max(len(key_order), 1)}" if current_key else "ollama-local"
+
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=OLLAMA_TIMEOUT)
         except Exception as exc:
@@ -260,8 +281,11 @@ def call_ollama(model_id, prompt, params, api_key_index: int = 0):
                 elapsed=time.time() - call_started,
                 error=str(exc),
                 error_type="network",
-                key_used="ollama",
+                key_used=key_label,
             )
+            if attempt + 1 < total_attempts:
+                time.sleep(OLLAMA_RETRY_BASE_DELAY * (attempt + 1))
+                continue
             break
 
         if response.status_code == 200:
@@ -269,16 +293,16 @@ def call_ollama(model_id, prompt, params, api_key_index: int = 0):
             return _base_result(
                 elapsed=time.time() - call_started,
                 text=data.get("response", ""),
-                key_used=f"ollama-cloud-{api_key_index}" if chosen_key else "ollama-local",
+                key_used=key_label,
             )
 
         last_result = _base_result(
             elapsed=time.time() - call_started,
             error=f"{response.status_code}: {response.text[:400]}",
             error_type="api",
-            key_used="ollama",
+            key_used=key_label,
         )
-        if response.status_code >= 500 and attempt + 1 < OLLAMA_RETRY_ATTEMPTS:
+        if response.status_code >= 500 and attempt + 1 < total_attempts:
             time.sleep(OLLAMA_RETRY_BASE_DELAY * (attempt + 1))
             continue
         break
@@ -492,7 +516,14 @@ def call_model(fighter_id, prompt, sabotage_params):
     provider = info.get("provider", "ollama").lower()
 
     if provider == "ollama":
-        return call_ollama(info["model_id"], prompt, params, api_key_index=info.get("api_key_index", 0))
+        if info.get("rotate_keys") and len(OLLAMA_API_KEYS) > 1:
+            fid = str(fighter_id)
+            count = _ollama_call_counters.get(fid, 0)
+            _ollama_call_counters[fid] = count + 1
+            key_idx = count % len(OLLAMA_API_KEYS)
+        else:
+            key_idx = info.get("api_key_index", 0)
+        return call_ollama(info["model_id"], prompt, params, api_key_index=key_idx)
 
     if provider == "groq":
         return call_groq(info["model_id"], prompt, params, fighter_key=str(fighter_id))

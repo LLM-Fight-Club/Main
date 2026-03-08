@@ -30,6 +30,7 @@ CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 FIGHT_START_DELAY = max(0.0, float(os.getenv("FIGHT_START_DELAY", "0.6") or "0.6"))
 TURN_RESULT_DELAY = max(0.0, float(os.getenv("TURN_RESULT_DELAY", "0.8") or "0.8"))
+MIN_TURN_DURATION = max(0.0, float(os.getenv("MIN_TURN_DURATION", "0") or "0"))
 
 active_fights = {}
 
@@ -136,6 +137,7 @@ def on_start_fight(data):
                 break
 
             socketio.emit("turn_thinking", {"turn": current.turn + 1}, to=sid)
+            turn_start = time.time()
             turn_data = current.run_turn()
             if turn_data is None:
                 break
@@ -168,6 +170,12 @@ def on_start_fight(data):
                 break
 
             time.sleep(TURN_RESULT_DELAY)
+
+            # Enforce minimum turn duration to avoid hammering APIs
+            elapsed = time.time() - turn_start
+            remaining = MIN_TURN_DURATION - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
 
         if sid in active_fights:
             active_fights[sid]["running"] = False
