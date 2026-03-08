@@ -246,6 +246,12 @@
                 <div class="hud-chip" id="brain-lead">Brain lead: --</div>
             </div>
 
+            <div class="commentary-console" id="commentary-console">
+                <div class="commentary-title">SARVAM LIVE</div>
+                <div class="commentary-text" id="live-commentary-text">Live commentary standing by.</div>
+                <div class="commentary-meta" id="live-commentary-meta">Waiting for the opening bell.</div>
+            </div>
+
             <div class="distance-indicator" id="distance-indicator">CLOSE</div>
 
             <div class="event-feed" id="event-feed"></div>
@@ -364,6 +370,22 @@
         </div>
 
         <div class="center-info">
+            <div class="crowd-control-panel">
+                <div class="crowd-lane">
+                    <div class="crowd-name" id="p1-crowd-name">P1 CROWD</div>
+                    <div class="crowd-count"><span id="p1-cheer-count">0</span> cheers</div>
+                    <button class="crowd-btn p1" onclick="sendAudienceCheer('p1')">CHEER P1</button>
+                </div>
+                <div class="crowd-lane">
+                    <div class="crowd-name" id="p2-crowd-name">P2 CROWD</div>
+                    <div class="crowd-count"><span id="p2-cheer-count">0</span> cheers</div>
+                    <button class="crowd-btn p2" onclick="sendAudienceCheer('p2')">CHEER P2</button>
+                </div>
+            </div>
+            <div class="crowd-notes">
+                <div class="crowd-note" id="p1-crowd-note">Crowd waiting for a moment.</div>
+                <div class="crowd-note" id="p2-crowd-note">Crowd waiting for a moment.</div>
+            </div>
             <div class="speed-compare" id="speed-compare">Latency order waiting...</div>
             <div class="speed-compare" id="distance-text">Distance: CLOSE</div>
             <div class="speed-compare" id="manual-event-text">Manual sabotage idle.</div>

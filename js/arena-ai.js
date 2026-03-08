@@ -92,6 +92,16 @@ const brainLead = document.getElementById('brain-lead');
 const eventFeed = document.getElementById('event-feed');
 const cotLogP1 = document.getElementById('cot-log-p1');
 const cotLogP2 = document.getElementById('cot-log-p2');
+const liveCommentaryText = document.getElementById('live-commentary-text');
+const liveCommentaryMeta = document.getElementById('live-commentary-meta');
+const p1CheerCount = document.getElementById('p1-cheer-count');
+const p2CheerCount = document.getElementById('p2-cheer-count');
+const p1CrowdName = document.getElementById('p1-crowd-name');
+const p2CrowdName = document.getElementById('p2-crowd-name');
+const p1CrowdNote = document.getElementById('p1-crowd-note');
+const p2CrowdNote = document.getElementById('p2-crowd-note');
+let liveCommentaryEnabled = false;
+let commentaryAudio = null;
 
 function playSound(id) {
     const sound = document.getElementById(id);
@@ -200,6 +210,81 @@ function escHtml(value) {
     return div.innerHTML;
 }
 
+function updateAudienceState(audience) {
+    if (!audience) {
+        return;
+    }
+
+    const left = audience.p1 || {};
+    const right = audience.p2 || {};
+
+    if (p1CheerCount) p1CheerCount.textContent = left.cheers ?? 0;
+    if (p2CheerCount) p2CheerCount.textContent = right.cheers ?? 0;
+    if (p1CrowdName) p1CrowdName.textContent = `${left.fighter_name || 'P1'} CROWD`;
+    if (p2CrowdName) p2CrowdName.textContent = `${right.fighter_name || 'P2'} CROWD`;
+    if (p1CrowdNote) p1CrowdNote.textContent = left.last_message || 'Crowd waiting for a moment.';
+    if (p2CrowdNote) p2CrowdNote.textContent = right.last_message || 'Crowd waiting for a moment.';
+}
+
+function updateLiveCommentary(entry) {
+    if (!liveCommentaryText || !liveCommentaryMeta) {
+        return;
+    }
+
+    if (!entry) {
+        if (liveCommentaryEnabled) {
+            liveCommentaryText.textContent = 'Sarvam commentary armed. Waiting for the first clean exchange.';
+            liveCommentaryMeta.textContent = 'Provider: Sarvam AI';
+        } else {
+            liveCommentaryText.textContent = 'Live commentary is offline for this match.';
+            liveCommentaryMeta.textContent = 'Set SARVAM_API_KEY and install the Sarvam SDK to enable it.';
+        }
+        return;
+    }
+
+    if (entry.error) {
+        liveCommentaryText.textContent = 'Sarvam commentary missed this exchange.';
+        liveCommentaryMeta.textContent = `${entry.provider || 'sarvam'} · ${entry.error}`;
+        return;
+    }
+
+    liveCommentaryText.textContent = entry.text || 'No commentary text returned.';
+    liveCommentaryMeta.textContent = `${entry.provider || 'sarvam'} · ${entry.model || 'live'} · Turn ${entry.turn || '?'}${entry.audio_error ? ` · TTS ${entry.audio_error}` : ''}`;
+
+    if (entry.audio_base64) {
+        const mime = entry.audio_mime || 'audio/mpeg';
+        const src = `data:${mime};base64,${entry.audio_base64}`;
+
+        if (!commentaryAudio) {
+            // First clip ever — just play it immediately
+            commentaryAudio = new Audio(src);
+            commentaryAudio.preload = 'auto';
+            commentaryAudio.play().catch(() => { });
+        } else if (commentaryAudio.paused || commentaryAudio.ended) {
+            // Previous clip done — play the new one right away
+            commentaryAudio.src = src;
+            commentaryAudio.currentTime = 0;
+            commentaryAudio.play().catch(() => { });
+        } else {
+            // Still talking — let it finish, then fade into new clip
+            const queuedAudio = new Audio(src);
+            queuedAudio.preload = 'auto';
+            commentaryAudio.addEventListener('ended', () => {
+                commentaryAudio = queuedAudio;
+                commentaryAudio.play().catch(() => { });
+            }, { once: true });
+        }
+    }
+}
+
+function triggerAudienceCheer(playerKey, cheers) {
+    const wrapper = playerKey === 'p1' ? fighter1Wrapper : fighter2Wrapper;
+    if (!wrapper) {
+        return;
+    }
+    showFloatingText(wrapper, cheers ? `CHEER x${cheers}` : 'CHEER!', 'crowd');
+}
+
 function addCotEntry(logElement, turnNum, fighter) {
     logElement.querySelectorAll('.cot-entry.latest').forEach((entry) => entry.classList.remove('latest'));
 
@@ -216,8 +301,11 @@ function addCotEntry(logElement, turnNum, fighter) {
     entry.className = 'cot-entry latest';
     entry.innerHTML = `
         <div class="cot-turn">Turn ${turnNum} · ${fighter.response_time}s</div>
+        <div class="cot-source ${fighter.is_fallback ? 'fallback' : 'model'}">${fighter.is_fallback ? 'AUTOPILOT FALLBACK' : 'LIVE MODEL'}</div>
         <div class="cot-move ${moveClass}">${move}</div>
-        <div class="cot-thinking">${escHtml(fighter.thinking || 'No reasoning')}</div>
+        ${fighter.display_debate ? `<div class="cot-debate">${escHtml(fighter.display_debate)}</div>` : ''}
+        <div class="cot-thinking">${escHtml(fighter.display_thinking || fighter.thinking || 'No reasoning')}</div>
+        ${fighter.model_error ? `<div class="cot-error">Model error: ${escHtml(fighter.model_error)}</div>` : ''}
         <div class="cot-prediction">Prediction: ${escHtml(fighter.prediction || 'Unknown')}</div>
         <div class="cot-confidence">Confidence: ${Math.round((fighter.confidence || 0) * 100)}%</div>
         <div class="cot-metadata">Brain ${fighter.brain_integrity}% · ${escHtml((fighter.status_flags || []).join(', '))}</div>
@@ -583,6 +671,9 @@ socket.on('fight_started', (data) => {
     timerEl.textContent = data.max_turns;
     turnCounter.textContent = `TURN 0/${data.max_turns}`;
     manualEventText.textContent = 'Manual sabotage ready.';
+    liveCommentaryEnabled = Boolean(data.live_commentary_enabled);
+    updateAudienceState(data.audience);
+    updateLiveCommentary(null);
 });
 
 socket.on('turn_thinking', (data) => {
@@ -639,6 +730,8 @@ socket.on('turn_result', (data) => {
     updateSabotageUI('p1', data.p1);
     updateSabotageUI('p2', data.p2);
     if (data.p1.x != null && data.p2.x != null) updateFighterPositions(data.p1.x, data.p2.x);
+    updateAudienceState(data.audience);
+    updateLiveCommentary(data.live_commentary || null);
 
     addCotEntry(cotLogP1, data.turn, data.p1);
     addCotEntry(cotLogP2, data.turn, data.p2);
@@ -660,6 +753,17 @@ socket.on('sabotage_update', (data) => {
         manualEventText.textContent = `${data.event.fighter_name}: ${data.event.action} applied`;
         pushManualEvent(data.event.summary);
     }
+});
+
+socket.on('audience_update', (data) => {
+    updateAudienceState(data.audience);
+    manualEventText.textContent = data.summary;
+    pushManualEvent(data.summary);
+    triggerAudienceCheer(data.player, data.cheers);
+});
+
+socket.on('live_commentary', (data) => {
+    updateLiveCommentary(data);
 });
 
 socket.on('fight_over', (data) => {
@@ -764,6 +868,12 @@ function sendSabotageAction(player, action) {
 }
 
 window.sendSabotageAction = sendSabotageAction;
+
+function sendAudienceCheer(player) {
+    if (socket) socket.emit('audience_cheer', { player });
+}
+
+window.sendAudienceCheer = sendAudienceCheer;
 
 window.downloadPDFReport = function() {
     if (!window.fightReport) return;

@@ -1,20 +1,20 @@
 {
   "models": [
     {
-      "name": "ollama",
-      "wins": 0,
-      "losses": 1,
-      "avg_score": 28.41,
-      "prediction_accuracy": 66.67,
-      "reasoning_quality": 2.73
+      "name": "groq",
+      "wins": 4,
+      "losses": 2,
+      "avg_score": 28.27,
+      "prediction_accuracy": 41.62,
+      "reasoning_quality": 2.07
     },
     {
-      "name": "groq",
-      "wins": 3,
-      "losses": 2,
-      "avg_score": 28.26,
-      "prediction_accuracy": 37.28,
-      "reasoning_quality": 2.28
+      "name": "ollama",
+      "wins": 1,
+      "losses": 3,
+      "avg_score": 19.39,
+      "prediction_accuracy": 42.75,
+      "reasoning_quality": 1.91
     }
   ]
 }

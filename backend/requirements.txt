@@ -8,4 +8,5 @@ seaborn==0.13.2
 numpy==1.23.5
 google-generativeai==0.8.5
 openai==1.82.0
+sarvamai
 eventlet==0.37.0
