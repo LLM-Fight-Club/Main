@@ -102,9 +102,25 @@ def _normalize_tts_speaker(model_name, speaker_name):
     return TTS_DEFAULT_SPEAKER[model]
 
 
+_CAPS_WORD = __import__('re').compile(r'\b([A-Z]{2,})\b')
+
+
+def _normalize_tts_text(text):
+    """Convert all-caps words like OH, WOW, YES to sentence-case so TTS doesn't spell them out."""
+    def _to_word(m):
+        w = m.group(1)
+        # Keep known acronyms/abbreviations as-is
+        keep = {'AI', 'LLM', 'OK', 'KO', 'RL', 'TTS', 'API'}
+        if w in keep:
+            return w
+        return w.capitalize()
+    return _CAPS_WORD.sub(_to_word, text)
+
+
 def _synthesize_commentary_audio(text):
     if not text:
         return {"audio_base64": None, "audio_mime": None, "audio_error": "No commentary text"}
+    text = _normalize_tts_text(text)
 
     tts_model = _normalize_tts_model(SARVAM_TTS_MODEL)
     tts_speaker = _normalize_tts_speaker(tts_model, SARVAM_TTS_SPEAKER)

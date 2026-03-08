@@ -94,6 +94,56 @@ function initSocket() {
     const eventFeed = document.getElementById('event-feed');
     const cotLogP1 = document.getElementById('cot-log-p1');
     const cotLogP2 = document.getElementById('cot-log-p2');
+    const liveCommentaryText = document.getElementById('live-commentary-text');
+    const liveCommentaryMeta = document.getElementById('live-commentary-meta');
+
+    // Commentary audio — single-slot queue, no pile-up
+    let commentaryAudio = null;
+    let commentaryNextSrc = null;
+
+    function _onCommentaryEnded() {
+        if (commentaryNextSrc) {
+            const src = commentaryNextSrc;
+            commentaryNextSrc = null;
+            commentaryAudio.src = src;
+            commentaryAudio.currentTime = 0;
+            commentaryAudio.play().catch(() => { });
+        }
+    }
+
+    function updateLiveCommentary(entry) {
+        if (!liveCommentaryText || !liveCommentaryMeta) return;
+        if (!entry) {
+            liveCommentaryText.textContent = 'Sarvam commentary armed. Waiting for the first clean exchange.';
+            liveCommentaryMeta.textContent = 'Provider: Sarvam AI';
+            return;
+        }
+        if (entry.error) {
+            liveCommentaryText.textContent = 'Commentary missed this exchange.';
+            liveCommentaryMeta.textContent = `${entry.provider || 'sarvam'} · ${entry.error}`;
+            return;
+        }
+        liveCommentaryText.textContent = entry.text || '';
+        liveCommentaryMeta.textContent = `${entry.provider || 'sarvam'} · ${entry.model || 'live'} · Turn ${entry.turn || '?'}${entry.audio_error ? ` · TTS ${entry.audio_error}` : ''}`;
+
+        if (entry.audio_base64) {
+            const src = `data:${entry.audio_mime || 'audio/mpeg'};base64,${entry.audio_base64}`;
+            if (!commentaryAudio) {
+                commentaryAudio = new Audio(src);
+                commentaryAudio.preload = 'auto';
+                commentaryAudio.addEventListener('ended', _onCommentaryEnded);
+                commentaryAudio.play().catch(() => { });
+            } else if (commentaryAudio.paused || commentaryAudio.ended) {
+                commentaryNextSrc = null;
+                commentaryAudio.src = src;
+                commentaryAudio.currentTime = 0;
+                commentaryAudio.play().catch(() => { });
+            } else {
+                // Still talking — overwrite pending slot with latest clip
+                commentaryNextSrc = src;
+            }
+        }
+    }
 
     function playSound(id) {
         const sound = document.getElementById(id);
@@ -656,6 +706,10 @@ function initSocket() {
 
         updateSummaryCards(data);
         renderTurnEvents(data.turn_events);
+    });
+
+    socket.on('live_commentary', (data) => {
+        updateLiveCommentary(data);
     });
 
     socket.on('sabotage_update', (data) => {
