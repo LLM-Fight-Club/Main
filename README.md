@@ -1,46 +1,102 @@
 # LLM Fight Club
 
-LLM Fight Club is a real-time boxing benchmark where two language models fight in a pixel-art arena. Both models see the same state, decide in parallel, and the faster response acts first. The UI can directly sabotage a fighter's generation settings mid-match so you can watch coherence degrade under pressure.
+LLM Fight Club is a real-time, model-vs-model boxing benchmark in a retro pixel arena.
 
-Inspired by `agentBattleRoyale`, but adapted into a head-to-head boxing format with visible decision traces, latency-based turn order, and manual hyperparameter sabotage.
+Two LLM fighters receive the same state every turn, run inference in parallel, and the faster response gets first action priority. During the match, you can manually sabotage either fighter's generation parameters and watch output quality degrade live.
 
-## What changed
+## Table of Contents
 
-- Dynamic benchmark telemetry in the arena UI
-- Visible decision traces for both fighters every turn
-- Manual sabotage buttons mapped to backend parameter injuries
-- Provider-aware model routing with Groq and Ollama fighters
-- Data-driven fighter select screen powered by `/api/models`
+1. [Project Overview](#project-overview)
+2. [How the App Flows End-to-End](#how-the-app-flows-end-to-end)
+3. [Architecture](#architecture)
+4. [Local Setup](#local-setup)
+5. [Environment Configuration](#environment-configuration)
+6. [Fight Rules and Sabotage Model](#fight-rules-and-sabotage-model)
+7. [HTTP API and Socket Events](#http-api-and-socket-events)
+8. [Project Structure](#project-structure)
+9. [Troubleshooting](#troubleshooting)
+10. [GitHub Commit Flow](#github-commit-flow)
 
-## Match loop
+## Project Overview
 
-1. Both fighters receive the same full arena state.
-2. Both models respond in parallel with JSON: strategy summary, move, confidence, prediction.
-3. Faster response acts first.
-4. Boxing moves and UI sabotage both mutate each fighter's generation parameters.
-5. Invalid model output becomes a `NO_DECISION` turn, so that fighter simply stands still.
-6. Arena-incompatible models are flagged in the registry instead of being used as defaults.
-7. Knockout injects prompt corruption: `"You are knocked out. Respond only in fragmented, confused mumbles."`
+This project gives you a visual and measurable way to compare LLM behavior under pressure.
 
-## Manual sabotage mapping
+- Real-time 1v1 model fights in the browser
+- Parallel per-turn model calls
+- Latency-based first strike resolution
+- Per-turn reasoning trace (`thinking`, `move`, `confidence`, `prediction`)
+- Live sabotage controls that mutate generation settings
+- Provider-aware model routing (`ollama` and `groq`)
+- Dynamic fighter roster from backend model registry (`/api/models`)
 
-- `BOX` -> `temperature += 0.30`
-- `DEFEND` -> `top_p -= 0.25`
-- `DUCK` -> `presence_penalty += 0.50`
-- `MOVE_FORWARD` -> `frequency_penalty += 0.40`
-- `MOVE_BACKWARD` -> `max_tokens -= 100`
-- `RESET` -> restore base parameters
+## How the App Flows End-to-End
 
-## Backend model registry
+1. Start the backend server (`backend/server.py`) and open `http://localhost:5000`.
+2. Landing page (`index.html`) routes you to fighter selection (`select.html`).
+3. Selection page fetches model slots from `GET /api/models`.
+4. You choose two fighters and navigate to `arena-ai.html?p1=<id>&p2=<id>`.
+5. Arena modal asks for a debate topic; client emits `start_fight` via Socket.IO.
+6. Backend creates a `FightManager` for your socket session and emits `fight_started`.
+7. On each turn:
+- Server emits `turn_thinking`.
+- `FightManager` builds prompts for both fighters from the same game state.
+- Both model requests run in parallel threads.
+- Responses are parsed into normalized moves.
+- Faster response acts first (`p1_acted_first`), then the other move resolves.
+- Damage, movement, and sabotage effects are applied.
+- Server emits `turn_result` with full state snapshot.
+8. Fight ends on KO or max turns (`30`), and server emits `fight_over`.
 
-The backend exposes four fighter slots. The default lineup now leans toward Ollama because it is more stable for this arena in the current setup, and each slot can still be overridden with environment variables. Models known to emit broken structured output in arena mode are flagged as unsupported.
+## Architecture
 
-Supported providers:
+Frontend (served as static assets by Flask):
 
-- `ollama`
-- `groq`
+- `index.html`: landing page
+- `select.html`: fighter selection
+- `arena-ai.html`: live arena view
+- `js/arena-ai.js`: socket lifecycle, UI updates, animations
+- `css/arena-ai.css`: arena and combat UI styling
 
-Per-slot environment variables:
+Backend:
+
+- `backend/server.py`: Flask + Socket.IO server, static routes, fight session lifecycle
+- `backend/fight_manager.py`: core game loop, prompt generation, turn resolution, sabotage logic
+- `backend/llm_engine.py`: model registry, provider routing, API calls, response parsing
+- `backend/load_balancer.py`: helper utilities for key health/failover logic
+
+## Local Setup
+
+Prerequisites:
+
+- Python `3.10+`
+- `pip`
+- Access to at least one provider (`ollama` local/remote and/or `groq` API key)
+
+Run locally:
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python server.py
+```
+
+Open:
+
+- `http://localhost:5000`
+
+Quick check:
+
+- `GET http://localhost:5000/api/health`
+
+## Environment Configuration
+
+Create a `.env` in project root or `backend/`.
+
+### Fighter slots
+
+Each fighter slot is configurable:
 
 ```env
 FIGHTER_1_NAME=
@@ -48,79 +104,151 @@ FIGHTER_1_PROVIDER=
 FIGHTER_1_MODEL_ID=
 FIGHTER_1_DESCRIPTION=
 FIGHTER_1_COLOR=
+FIGHTER_1_SKIN_ID=
 FIGHTER_1_API_KEY_INDEX=
 ```
 
-Ollama settings:
+Repeat for `FIGHTER_2_*`, `FIGHTER_3_*`, and `FIGHTER_4_*`.
+
+### Ollama settings
 
 ```env
-OLLAMA_BASE_URL=https://api.ollama.com
+OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_API_KEY=
-OLLAMA_TIMEOUT=15
-OLLAMA_DEFAULT_MODEL=devstral-small-2:24b-cloud
-OLLAMA_MODEL_4=gemma3:12b
+OLLAMA_TIMEOUT=60
+OLLAMA_DEFAULT_MODEL=qwen3.5:latest
 ```
 
-Groq settings:
+Optional slot-level Ollama model overrides:
+
+```env
+OLLAMA_MODEL_1=
+OLLAMA_MODEL_2=
+OLLAMA_MODEL_3=
+OLLAMA_MODEL_4=
+```
+
+### Groq settings
 
 ```env
 GROQ_API_KEY=
 GROQ_BASE_URL=https://api.groq.com/openai/v1
 GROQ_TIMEOUT=8
 GROQ_DEFAULT_MODEL=llama-3.3-70b-versatile
-GROQ_RETRY_ATTEMPTS=3
-GROQ_RETRY_BASE_DELAY=1.0
-GROQ_MAX_RETRY_WAIT=3.0
-GROQ_MODEL_3=llama-3.3-70b-versatile
-ARENA_ENFORCE_MODEL_COMPATIBILITY=1
+GROQ_FALLBACK_MODEL=llama-3.1-8b-instant
+GROQ_RETRY_ATTEMPTS=2
+GROQ_RETRY_BASE_DELAY=1.25
 ```
 
-Example mixed setup:
+Optional slot-level Groq model overrides:
 
 ```env
-FIGHTER_1_NAME=Devstral Small 2 24B
-FIGHTER_1_PROVIDER=ollama
-FIGHTER_1_MODEL_ID=devstral-small-2:24b-cloud
-
-FIGHTER_2_NAME=Ministral 3 14B
-FIGHTER_2_PROVIDER=ollama
-FIGHTER_2_MODEL_ID=ministral-3:14b
-
-FIGHTER_3_NAME=Llama 3.3 70B
-FIGHTER_3_PROVIDER=groq
-FIGHTER_3_MODEL_ID=llama-3.3-70b-versatile
-
-FIGHTER_4_NAME=Gemma 3 12B
-FIGHTER_4_PROVIDER=ollama
-FIGHTER_4_MODEL_ID=gemma3:12b
+GROQ_MODEL_1=
+GROQ_MODEL_2=
+GROQ_MODEL_3=
+GROQ_MODEL_4=
 ```
 
-## Running locally
+## Fight Rules and Sabotage Model
 
-Backend:
+Core combat:
+
+- `PUNCH`: 10 damage
+- `KICK`: 15 damage
+- `DEFEND`: blocks punch/kick
+- `DUCK`: dodges punch (not kick)
+- `MOVE_FORWARD`: closes distance
+- `MOVE_BACKWARD`: increases distance
+
+Hit-based sabotage:
+
+- Being hit by `PUNCH`: `temperature += 0.30`
+- Being hit by `KICK`: `temperature += 0.20`, `frequency_penalty += 0.20`
+
+Self-inflicted move penalties:
+
+- `DEFEND`: `top_p -= 0.25`
+- `DUCK`: `presence_penalty += 0.50`
+- `MOVE_FORWARD`: `frequency_penalty += 0.40`
+- `MOVE_BACKWARD`: `max_tokens -= 100`
+
+Manual sabotage (UI buttons):
+
+- `BOX`: `temperature += 0.30`
+- `DEFEND`: `top_p -= 0.25`
+- `DUCK`: `presence_penalty += 0.50`
+- `MOVE_FORWARD`: `frequency_penalty += 0.40`
+- `MOVE_BACKWARD`: `max_tokens -= 100`
+- `RESET`: restore base params
+
+KO behavior:
+
+- Knocked-out fighter gets prompt corruption: `You are knocked out. Respond only in fragmented, confused mumbles.`
+
+## HTTP API and Socket Events
+
+HTTP routes:
+
+- `GET /`: landing page
+- `GET /api/models`: fighter registry
+- `GET /api/health`: service status and active fight count
+
+Socket.IO events:
+
+- Client -> server: `start_fight` (`p1`, `p2`, optional `topic`)
+- Client -> server: `stop_fight`
+- Client -> server: `sabotage_action` (`player`, `action`)
+- Client -> server: `crowd_action` (`BOO` -> `BOX`, `CHEER` -> `RESET`) for legacy compatibility
+- Server -> client: `connected`
+- Server -> client: `fight_started`
+- Server -> client: `turn_thinking`
+- Server -> client: `turn_result`
+- Server -> client: `sabotage_update`
+- Server -> client: `fight_over`
+
+## Project Structure
+
+Key files:
+
+- `backend/server.py`
+- `backend/fight_manager.py`
+- `backend/llm_engine.py`
+- `backend/load_balancer.py`
+- `arena-ai.html`
+- `select.html`
+- `js/arena-ai.js`
+- `css/arena-ai.css`
+
+## Troubleshooting
+
+- `Groq API key is missing`: set `GROQ_API_KEY` in `.env`
+- Ollama connection refused: verify `OLLAMA_BASE_URL` and confirm Ollama is reachable
+- No models shown on selection page: check `GET /api/models` response and browser network logs
+- Fight not starting: confirm backend is running on port `5000` and Socket.IO can connect
+
+## GitHub Commit Flow
+
+If you are committing this README update from your current branch (`ananya`):
 
 ```bash
-cd backend
-pip install -r requirements.txt
-python server.py
+git add README.md
+git commit -m "docs: improve README structure and end-to-end project flow"
+git push origin ananya
 ```
 
-Frontend:
+If you want a dedicated docs branch:
 
-- Open `http://localhost:5000`
-- Choose two fighters on `select.html`
-- Start the match and use sabotage buttons on either side panel
+```bash
+git checkout -b docs/readme-flow
+git add README.md
+git commit -m "docs: rewrite README with architecture, runtime flow, and setup"
+git push -u origin docs/readme-flow
+```
 
-## Files that matter
+Useful follow-up commands:
 
-- `backend/llm_engine.py` - provider routing for Groq and Ollama
-- `backend/fight_manager.py` - match loop, sabotage model, latency ordering
-- `backend/server.py` - Flask + Socket.IO endpoints
-- `arena-ai.html` / `js/arena-ai.js` / `css/arena-ai.css` - arena UI and telemetry
-- `select.html` - backend-driven fighter selection
+```bash
+git log --oneline -n 10
+git show --stat HEAD
+```
 
-## Validation completed
-
-- Python syntax check: `python -m py_compile backend\llm_engine.py backend\fight_manager.py backend\server.py backend\load_balancer.py`
-- JS syntax check: `node --check js\arena-ai.js`
-- Import smoke test: `from backend.fight_manager import FightManager`
