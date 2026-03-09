@@ -1,4 +1,8 @@
 node_modules/
+backend/__pycache__/
+**/__pycache__/
+*.pyc
+backend/node_modules/
 backend/node_modules/
 frontend/node_modules/
 .env
@@ -6,3 +10,14 @@ backend/.env
 dist/
 build/
 .DS_Store
+llm_thinking_is_actual_fight.md
+feature_analysis_engine.md
+dumped_code.md
+reasoning_score_feature.md
+metrics_evolution.md
+reasoning_score_feature.md
+intelligence_score_feature.md
+strategy_heatmaps_feature.md
+leaderboard_system_feature.md
+fight_replay_feature.md
+ui_upgrades_feature.md

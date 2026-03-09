@@ -16,9 +16,11 @@ from flask_socketio import SocketIO, emit
 try:
     from .fight_manager import FightManager
     from .llm_engine import MODELS
+    from .analysis_engine import FightAnalyzer
 except ImportError:
     from fight_manager import FightManager
     from llm_engine import MODELS
+    from analysis_engine import FightAnalyzer
 
 load_dotenv()
 
@@ -26,6 +28,9 @@ load_dotenv()
 app = Flask(__name__, static_folder="..", static_url_path="")
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+FIGHT_START_DELAY = max(0.0, float(os.getenv("FIGHT_START_DELAY", "0.6") or "0.6"))
+TURN_RESULT_DELAY = max(0.0, float(os.getenv("TURN_RESULT_DELAY", "0.8") or "0.8"))
+MIN_TURN_DURATION = max(0.0, float(os.getenv("MIN_TURN_DURATION", "0") or "0"))
 
 active_fights = {}
 
@@ -50,6 +55,36 @@ def health_check():
     return jsonify({"status": "ok", "fights": len(active_fights)})
 
 
+@app.route("/api/leaderboard")
+def get_leaderboard():
+    data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+    leaderboard_path = os.path.join(data_dir, "leaderboard.json")
+    if os.path.exists(leaderboard_path):
+        import json
+        with open(leaderboard_path, "r") as f:
+            try:
+                data = json.load(f)
+                return jsonify(data)
+            except json.JSONDecodeError:
+                return jsonify({"models": []})
+    return jsonify({"models": []})
+
+
+@app.route("/api/download_report/<sid>")
+def download_report(sid):
+    if sid not in active_fights:
+        return jsonify({"error": "Fight not found or already cleared."}), 404
+        
+    fight_data = active_fights.get(sid)
+    fight = fight_data.get("fight") if fight_data else None
+    
+    if not fight:
+        return jsonify({"error": "Invalid fight state."}), 500
+
+    analyzer = FightAnalyzer(fight)
+    return jsonify({"analysis_report": analyzer.generate_final_report()})
+
+
 @socketio.on("connect")
 def on_connect():
     sid = request.sid
@@ -72,8 +107,14 @@ def on_start_fight(data):
     p1 = str(data.get("p1", "1"))
     p2 = str(data.get("p2", "2"))
     topic = str(data.get("topic", "")).strip()
+    p1name = str(data.get("p1name", "")).strip()
+    p2name = str(data.get("p2name", "")).strip()
 
     fight = FightManager(p1, p2, topic=topic)
+    if p1name:
+        fight.fighter1.display_name = p1name
+    if p2name:
+        fight.fighter2.display_name = p2name
     active_fights[sid] = {"fight": fight, "running": True}
 
     print(
@@ -82,8 +123,13 @@ def on_start_fight(data):
     )
     emit("fight_started", fight.get_initial_state())
 
+    def emit_live_commentary(turn_payload):
+        commentary = fight.generate_turn_commentary(turn_payload)
+        if commentary and active_fights.get(sid, {}).get("running", False):
+            socketio.emit("live_commentary", commentary, to=sid)
+
     def loop():
-        time.sleep(2.5)
+        time.sleep(FIGHT_START_DELAY)
 
         while active_fights.get(sid, {}).get("running", False):
             current = active_fights[sid]["fight"]
@@ -91,11 +137,20 @@ def on_start_fight(data):
                 break
 
             socketio.emit("turn_thinking", {"turn": current.turn + 1}, to=sid)
+            turn_start = time.time()
             turn_data = current.run_turn()
             if turn_data is None:
                 break
 
             socketio.emit("turn_result", turn_data, to=sid)
+
+            if turn_data.get("live_commentary_enabled"):
+                commentary_thread = threading.Thread(
+                    target=emit_live_commentary,
+                    args=(turn_data,),
+                    daemon=True,
+                )
+                commentary_thread.start()
 
             if turn_data["game_over"]:
                 socketio.emit(
@@ -104,6 +159,8 @@ def on_start_fight(data):
                         "winner": turn_data["winner"],
                         "winner_id": turn_data.get("winner_id"),
                         "winner_position": turn_data.get("winner_position"),
+                        "victory_type": turn_data.get("victory_type"),
+                        "finish_reason": turn_data.get("finish_reason"),
                         "turns": current.turn,
                         "p1_final": current.fighter1.to_dict(),
                         "p2_final": current.fighter2.to_dict(),
@@ -112,7 +169,13 @@ def on_start_fight(data):
                 )
                 break
 
-            time.sleep(3)
+            time.sleep(TURN_RESULT_DELAY)
+
+            # Enforce minimum turn duration to avoid hammering APIs
+            elapsed = time.time() - turn_start
+            remaining = MIN_TURN_DURATION - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
 
         if sid in active_fights:
             active_fights[sid]["running"] = False
@@ -168,6 +231,20 @@ def on_legacy_crowd_action(data):
     if not mapped_action:
         return
     on_sabotage_action({"player": data.get("player"), "action": mapped_action})
+
+
+@socketio.on("audience_cheer")
+def on_audience_cheer(data):
+    sid = request.sid
+    if sid not in active_fights:
+        return
+
+    fight = active_fights[sid]["fight"]
+    event = fight.register_audience_cheer(data.get("player"))
+    if not event:
+        return
+
+    socketio.emit("audience_update", event, to=sid)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,20 @@
+{
+  "models": [
+    {
+      "name": "groq",
+      "wins": 13,
+      "losses": 7,
+      "avg_score": 27.19,
+      "prediction_accuracy": 42.31,
+      "reasoning_quality": 1.48
+    },
+    {
+      "name": "ollama",
+      "wins": 4,
+      "losses": 10,
+      "avg_score": 15.5,
+      "prediction_accuracy": 29.64,
+      "reasoning_quality": 1.43
+    }
+  ]
+}

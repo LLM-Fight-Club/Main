@@ -169,3 +169,29 @@
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
 }
+
+.leaderboard-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 200;
+    background: transparent;
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: transform 0.15s ease, text-shadow 0.15s ease;
+    letter-spacing: 0.04em;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.leaderboard-btn:hover {
+    transform: scale(1.06);
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.9);
+}
+
+.leaderboard-btn:active {
+    transform: scale(0.97);
+}

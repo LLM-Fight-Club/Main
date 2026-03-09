@@ -56,6 +56,15 @@ body {
     flex-shrink: 0;
 }
 
+.ai-thinking {
+    animation: thinkingGlow 1.5s infinite alternate;
+}
+
+@keyframes thinkingGlow {
+    from { filter: drop-shadow(0 0 5px #00ffff) brightness(1.2); }
+    to { filter: drop-shadow(0 0 20px #00ffff) brightness(1.7); }
+}
+
 .player-name {
     display: block;
     margin-bottom: 6px;
@@ -91,6 +100,30 @@ body {
 .health-fill.low {
     background: linear-gradient(180deg, #ff5b6f, #d92a47 55%, #8a1025) !important;
 }
+
+.health-bar.critical-hit {
+    animation: barImpact 0.4s ease;
+}
+
+@keyframes barImpact {
+    0% { transform: scaleX(1); box-shadow: inset 0 0 0 rgba(255, 0, 0, 0); }
+    30% { transform: scaleX(1.05); box-shadow: inset 0 0 25px rgba(255, 0, 0, 0.9); }
+    60% { transform: scaleX(0.98); box-shadow: inset 0 0 10px rgba(255, 0, 0, 0.5); }
+    100% { transform: scaleX(1); box-shadow: inset 0 0 0 rgba(255, 0, 0, 0); }
+}
+
+.reward-score {
+    font-size: 8px;
+    color: #4af;
+    margin-top: 4px;
+    font-family: 'Press Start 2P', monospace;
+    text-shadow: 1px 1px 0px #000;
+}
+
+.reward-score.right {
+    text-align: right;
+}
+
 
 .timer-box {
     min-width: 82px;
@@ -294,6 +327,40 @@ body {
     color: #8fa0be;
 }
 
+.cot-source {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 6px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    font-size: 7px;
+    letter-spacing: 0.08em;
+    color: #dff7ff;
+    background: rgba(76, 178, 255, 0.15);
+    border: 1px solid rgba(76, 178, 255, 0.25);
+}
+
+.cot-source.error {
+    color: #ffe2a3;
+    background: rgba(255, 198, 92, 0.15);
+    border-color: rgba(255, 198, 92, 0.3);
+}
+
+.cot-debate {
+    margin-bottom: 6px;
+    padding: 8px;
+    border-left: 2px solid rgba(110, 242, 255, 0.35);
+    background: rgba(255, 255, 255, 0.03);
+    color: #f2f7ff;
+    line-height: 1.5;
+}
+
+.cot-error {
+    margin-top: 6px;
+    font-size: 7px;
+    color: #ffb1a8;
+}
+
 .thinking-indicator {
     padding: 10px;
     margin-bottom: 8px;
@@ -344,6 +411,42 @@ body {
     font-size: 7px;
     color: #dce5f5;
     backdrop-filter: blur(10px);
+}
+
+.commentary-console {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    z-index: 30;
+    width: min(44vw, 460px);
+    transform: translateX(-50%);
+    padding: 12px 14px;
+    border: 1px solid rgba(110, 242, 255, 0.25);
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(7, 14, 26, 0.9), rgba(5, 8, 16, 0.82));
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(10px);
+}
+
+.commentary-title {
+    margin-bottom: 6px;
+    font-size: 7px;
+    color: #6ef2ff;
+    letter-spacing: 0.14em;
+}
+
+.commentary-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #eef5ff;
+}
+
+.commentary-meta {
+    margin-top: 7px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7px;
+    color: #9cb3d1;
 }
 
 .distance-indicator {
@@ -529,6 +632,76 @@ body {
     min-width: 200px;
 }
 
+.crowd-control-panel {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+.crowd-lane {
+    min-width: 124px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: center;
+}
+
+.crowd-name {
+    font-size: 7px;
+    color: #cdd7e7;
+    margin-bottom: 4px;
+}
+
+.crowd-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #f4fbff;
+    margin-bottom: 8px;
+}
+
+.crowd-count span {
+    color: #ffe44f;
+}
+
+.crowd-btn {
+    width: 100%;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #fff;
+    background: linear-gradient(180deg, #3d4f74, #222f4d);
+}
+
+.crowd-btn.p1 {
+    border-color: rgba(0, 255, 149, 0.25);
+    background: linear-gradient(180deg, #1bb87c, #0c7a54);
+}
+
+.crowd-btn.p2 {
+    border-color: rgba(255, 122, 69, 0.25);
+    background: linear-gradient(180deg, #ff7a45, #c84428);
+}
+
+.crowd-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: min(100%, 420px);
+}
+
+.crowd-note {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    line-height: 1.4;
+    color: #aab7d1;
+    text-align: center;
+}
+
 .speed-compare {
     font-size: 7px;
     color: #aab7d1;
@@ -545,10 +718,26 @@ body {
     z-index: 200;
     display: none;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     background: rgba(2, 4, 10, 0.92);
+    overflow-y: auto;
 }
+
+.victory-scroll-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+    padding: 5vh 0;
+    width: 100%;
+    margin: auto 0;
+}
+
+.victory-overlay::-webkit-scrollbar { width: 8px; }
+.victory-overlay::-webkit-scrollbar-track { background: #000; border-radius: 4px; }
+.victory-overlay::-webkit-scrollbar-thumb { background: #4af; border-radius: 4px; }
 
 .victory-overlay h1 {
     margin-bottom: 12px;
@@ -556,6 +745,19 @@ body {
     color: #ffe44f;
     text-shadow: 4px 4px 0 #000, 0 0 24px rgba(255, 228, 79, 0.75);
     animation: victoryPulse 0.6s ease-in-out infinite alternate;
+}
+
+.knockout-text {
+    font-size: 60px !important;
+    color: #ff1111 !important;
+    text-shadow: 5px 5px 0 #000, 0 0 40px rgba(255, 0, 0, 1) !important;
+    animation: zoomKnockout 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards !important;
+}
+
+@keyframes zoomKnockout {
+    0% { transform: scale(0.1) rotate(-10deg); opacity: 0; }
+    50% { transform: scale(1.2) rotate(5deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
 .winner-model {
@@ -579,6 +781,10 @@ body {
     text-align: center;
 }
 
+.stat-card.full-width {
+    grid-column: 1 / -1;
+}
+
 .stat-label {
     margin-bottom: 5px;
     font-size: 7px;
@@ -588,6 +794,11 @@ body {
 .stat-val {
     font-size: 12px;
     color: #fff;
+}
+
+.stat-val.small {
+    font-size: 0.5rem;
+    line-height: 1.4;
 }
 
 .victory-overlay button {
@@ -712,6 +923,18 @@ body {
     40%, 60% { transform: translate3d(10px, 4px, 0); }
 }
 
+.fight-arena.shake-massive {
+    animation: shakeMassive 0.6s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes shakeMassive {
+    0%, 100% { transform: translate3d(0, 0, 0); }
+    10%, 90% { transform: translate3d(-10px, -5px, 0); }
+    20%, 80% { transform: translate3d(15px, 10px, 0); }
+    30%, 50%, 70% { transform: translate3d(-20px, -15px, 0); }
+    40%, 60% { transform: translate3d(25px, 15px, 0); }
+}
+
 .floating-text {
     position: absolute;
     pointer-events: none;
@@ -729,6 +952,54 @@ body {
     transform: scale(1.2);
 }
 
+.floating-text.critical {
+    color: #ffee00;
+    font-size: 24px;
+    font-weight: bold;
+    text-shadow: 0 0 15px #ff0000, 3px 3px 0 #000;
+    transform: scale(1.5);
+    z-index: 105;
+}
+
+.floating-text.damage.massive {
+    color: #ffffff;
+    font-size: 32px;
+    text-shadow: 0 0 20px #ff0000, 4px 4px 0 #000;
+    transform: scale(1.8);
+    z-index: 105;
+}
+
+.floating-text.ultimate {
+    font-size: 40px;
+    color: #ff00ff;
+    text-shadow: 0 0 35px #ff00ff, 4px 4px 0 #000, -2px -2px 0 #fff;
+    z-index: 200;
+    transform: scale(2);
+}
+
+.floating-text.combo {
+    color: #00ffff;
+    font-size: 28px;
+    font-weight: bold;
+    text-shadow: 0 0 20px #00ffff, 3px 3px 0 #000;
+    z-index: 106;
+}
+
+.fight-arena.flash-critical::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 0, 0, 0.4);
+    z-index: 90;
+    animation: screenFlash 0.5s ease-out;
+    pointer-events: none;
+}
+
+@keyframes screenFlash {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
 .floating-text.block {
     color: #7bd4ff;
     font-size: 14px;
@@ -743,6 +1014,12 @@ body {
 .floating-text.whiff {
     color: #aaaaaa;
     font-size: 12px;
+}
+
+.floating-text.crowd {
+    color: #ffe44f;
+    font-size: 18px;
+    text-shadow: 0 0 18px rgba(255, 228, 79, 0.65), 2px 2px 0 #000;
 }
 
 @keyframes floatUpFade {
@@ -796,6 +1073,11 @@ body {
         overflow-y: auto;
     }
 
+    .commentary-console {
+        width: min(58vw, 460px);
+        top: 52px;
+    }
+
     .main-layout {
         flex-direction: column;
     }
@@ -846,6 +1128,12 @@ body {
 
     .benchmark-hud {
         max-width: calc(100% - 32px);
+    }
+
+    .commentary-console {
+        position: absolute;
+        top: 86px;
+        width: calc(100% - 32px);
     }
 
     .event-item {
